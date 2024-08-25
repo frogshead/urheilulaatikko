@@ -32,4 +32,10 @@ jobs:
       run: cargo build --verbose --manifest-path ./client/Cargo.toml
     - name: Run tests
       run: cargo test --verbose --manifest-path ./client/Cargo.toml
+
+    - name: Build for raspberry pi
+      run: cargo build --verbose --manifest-path ./client/Cargo.toml --target armv7-unknown-linux-gnueabihf
+    - name: Run tests for raspberry pi
+      run: cargo test --verbose --manifest-path ./client/Cargo.toml --target armv7-unknown-linux-gnueabihf
+      
   
