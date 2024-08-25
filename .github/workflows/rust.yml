@@ -46,4 +46,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
          name: raspberry pi executable
-         path: client/target/armv7-unknown-linux-gnueabihf/release/client
+         path: ./**/target/*/release/client
