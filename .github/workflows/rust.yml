@@ -42,5 +42,8 @@ jobs:
       run: cross build --verbose --manifest-path ./client/Cargo.toml --target armv7-unknown-linux-gnueabihf
     - name: Run tests for raspberry pi
       run: cross test --verbose --manifest-path ./client/Cargo.toml --target armv7-unknown-linux-gnueabihf
-
+    - name: Publish GitHub release
+      uses: softprops/action-gh-release@v1
+      with:
+       files: "client"
   
