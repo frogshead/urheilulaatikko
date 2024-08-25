@@ -17,6 +17,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build
-      run: cargo build --verbose --manifest-path ./server
+      run: cargo build --verbose --manifest-path ./server/Cargo.toml
     - name: Run tests
-      run: cargo test --verbose --manifest-path ./server
+      run: cargo test --verbose --manifest-path ./server/Cargo.toml
