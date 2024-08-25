@@ -10,7 +10,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build_server:
+    name: Builds Server Side code
 
     runs-on: ubuntu-latest
 
@@ -20,3 +21,15 @@ jobs:
       run: cargo build --verbose --manifest-path ./server/Cargo.toml
     - name: Run tests
       run: cargo test --verbose --manifest-path ./server/Cargo.toml
+   
+  build_client:
+    name: Builds client side code and does cross-compiling
+    
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build
+      run: cargo build --verbose --manifest-path ./client/Cargo.toml
+    - name: Run tests
+      run: cargo test --verbose --manifest-path ./client/Cargo.toml
+  
