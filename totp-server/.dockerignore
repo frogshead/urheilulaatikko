@@ -1,0 +1,6 @@
+target/
+.git/
+.env
+docker/
+scripts/
+*.md

@@ -1,0 +1,95 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_MULTIPLE_DATABASES: keycloak,totp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./docker/postgres/init-multi-db.sh:/docker-entrypoint-initdb.d/init-multi-db.sh:ro
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Renders docker/keycloak/realm-export.template.json into the import volume
+  # with the test passwords filled in, then exits. Keycloak waits for it.
+  keycloak-realm:
+    image: alpine:3.20
+    command: ["/render-realm.sh"]
+    environment:
+      TEST_USER_PASSWORD: ${TEST_USER_PASSWORD:?set TEST_USER_PASSWORD in .env}
+      TEST_ADMIN_PASSWORD: ${TEST_ADMIN_PASSWORD:?set TEST_ADMIN_PASSWORD in .env}
+    volumes:
+      - ./docker/keycloak/render-realm.sh:/render-realm.sh:ro
+      - ./docker/keycloak/realm-export.template.json:/template/realm-export.template.json:ro
+      - keycloak_import:/import
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: postgres
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+      # Tokens must carry the issuer clients see from the host, while the
+      # totp-server container reaches Keycloak by its compose hostname. Pinning
+      # the frontend hostname and allowing a dynamic backchannel lets both work;
+      # without this, introspection rejects every token as inactive.
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-8080}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+    volumes:
+      - keycloak_import:/opt/keycloak/data/import:ro
+    ports:
+      - "${KEYCLOAK_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak-realm:
+        condition: service_completed_successfully
+    healthcheck:
+      # The management port serves the health endpoints in Keycloak 26, and the
+      # image has no curl — Java's own HTTP client stands in.
+      test:
+        [
+          "CMD-SHELL",
+          "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\nHost: localhost\\nConnection: close\\n\\n' >&3 && grep -q '\"status\": \"UP\"' <&3",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  totp-server:
+    build: .
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/totp
+      KEYCLOAK_ISSUER: http://keycloak:8080/realms/lock-demo
+      TOTP_SERVER_KEYCLOAK_CLIENT_ID: totp-server
+      TOTP_SERVER_KEYCLOAK_CLIENT_SECRET: dev-secret-change-me
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?set TOTP_ENCRYPTION_KEY in .env}
+      TOTP_SKEW_STEPS: ${TOTP_SKEW_STEPS:-1}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-6}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-300}
+      HOST: 0.0.0.0
+      PORT: 3000
+      RUST_LOG: info,totp_server=debug
+    ports:
+      - "${TOTP_SERVER_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  keycloak_import:

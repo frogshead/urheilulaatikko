@@ -1,0 +1,42 @@
+[package]
+name = "totp-server"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "totp_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "totp-server"
+path = "src/main.rs"
+
+[dependencies]
+aes-gcm = "0.11.1"
+anyhow = "1.0.104"
+axum = "0.8.9"
+base64 = "0.23.1"
+chrono = { version = "0.4.45", features = ["serde"] }
+dotenvy = "0.15.7"
+governor = "0.10.4"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+serde = { version = "1.0.229", features = ["derive"] }
+sha2 = "0.11.0"
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "tls-rustls-ring", "postgres", "uuid", "chrono", "migrate", "macros"] }
+thiserror = "2.0.20"
+tokio = { version = "1.53.1", features = ["full"] }
+totp-rs = { version = "6.0.0", features = ["gen_secret", "otpauth"] }
+tower-http = { version = "0.7.1", features = ["trace"] }
+tower_governor = { version = "0.8.0", features = ["axum", "tracing"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+uuid = { version = "1.26.0", features = ["v4", "serde"] }
+
+[dev-dependencies]
+base32 = "0.5.1"
+futures-lite = "2.6.1"
+hmac = "0.13.0"
+serde_json = "1.0.151"
+sha1 = "0.11.0"
+testcontainers-modules = { version = "0.15.0", features = ["postgres"] }
+wiremock = "0.6.5"
