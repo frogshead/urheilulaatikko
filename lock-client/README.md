@@ -32,18 +32,45 @@ cd firmware
 cargo build --release
 ```
 
-The firmware ELF lands at
-`target/riscv32imc-unknown-none-elf/release/lock-client-firmware`. Flashing it
-needs [`espflash`](https://github.com/esp-rs/espflash)
-(`cargo install espflash`); `firmware/.cargo/config.toml` already points
-`cargo run` at it (`espflash flash --monitor`).
+The workspace has one shared `target/` directory at its root
+(`lock-client/target/`, not `lock-client/firmware/target/`), since Cargo
+workspaces share one build output directory — the firmware ELF lands at
+`lock-client/target/riscv32imc-unknown-none-elf/release/lock-client-firmware`
+regardless of which member directory you build from.
+
+Flashing needs [`espflash`](https://github.com/esp-rs/espflash) — install
+with `cargo install espflash --locked` (a version compatible with the pinned
+toolchain; see the note below). From `firmware/`:
+
+```bash
+espflash flash --port /dev/ttyACM0 ../target/riscv32imc-unknown-none-elf/release/lock-client-firmware
+espflash monitor --port /dev/ttyACM0    # interactive; needs a real terminal
+```
+
+**This has been flashed to a real ESP32-C3-DevKit-RUST-2** (native
+USB-JTAG/Serial, shows up as `/dev/ttyACM0` on Linux) and confirmed to boot
+past the ESP-IDF second-stage bootloader into the app, print `lock-client
+ready`, and then sit idle without panicking or reboot-looping — expected,
+since nothing prints again until a Wiegand frame arrives. Two things only
+showed up at this step, not from `cargo build`:
+
+- **`esp_bootloader_esp_idf::esp_app_desc!()` is required.** Without it,
+  `espflash flash` refuses with a missing-app-descriptor error — the
+  bootloader validates this before accepting an image. It's a one-line macro
+  call in `main.rs`; `cargo build` doesn't check for it, only the flash tool
+  does.
+- **`espflash` needs upgrading past whatever the OS/package manager ships.**
+  4.3.0 connected to the board fine but failed the actual flash step with an
+  opaque `No such file or directory` error; upgrading to `4.5.0` (the newest
+  version still compatible with rustc 1.89 — `4.6.0` needs 1.95) fixed it.
 
 **Toolchain note:** the `esp-hal` dependency stack is pinned to exact versions
-(`esp-hal =1.1.2`, `esp-backtrace =0.19.0`, `esp-println =0.17.0`, plus a
-downgrade of the transitive `esp-rom-sys` to 0.1.4) because newer releases
-require rustc 1.95, ahead of the 1.89 toolchain this was built and verified
-against. Bumping these is fine once the project's toolchain moves past 1.95 —
-just re-check that `cargo build --release` (from `firmware/`) still links.
+(`esp-hal =1.1.2`, `esp-backtrace =0.19.0`, `esp-println =0.17.0`,
+`esp-bootloader-esp-idf =0.5.0`, plus a downgrade of the transitive
+`esp-rom-sys` to 0.1.4) because newer releases require rustc 1.95, ahead of
+the 1.89 toolchain this was built and verified against. Bumping these is fine
+once the project's toolchain moves past 1.95 — just re-check that
+`cargo build --release` (from `firmware/`) still links and flashes.
 
 ## How it fits together
 
@@ -108,3 +135,9 @@ they are never treated as a digit or as a wildcard match.
   parts list (`plywood-box/laatikko-ohje-ja-ostoslista.md`) for the open note.
 - **Pin numbers in `firmware/src/main.rs` are placeholders** (GPIO2/3 for
   D0/D1, GPIO4 for the relay). Update them to match the actual wiring.
+- **Only boot has been verified on real hardware so far** — flashed and
+  confirmed it reaches `lock-client ready` and stays stable with nothing
+  connected to GPIO2/3/4. The Wiegand capture, decode, and relay-drive path
+  has only been exercised by `core`'s unit tests with fake pulses, not against
+  a real keypad — that's still open, on top of the wire-format and
+  level-shifting unknowns above.

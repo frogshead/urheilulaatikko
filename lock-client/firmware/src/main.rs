@@ -19,6 +19,11 @@ use lock_client_core::{
 
 use crate::{actuator::BoltActuator, clock::SystemClock};
 
+// Required by espflash/the ESP-IDF bootloader to validate the image before
+// flashing — without it, flashing is refused with a missing-app-descriptor
+// error (found by actually trying to flash a board, not by `cargo build`).
+esp_bootloader_esp_idf::esp_app_desc!();
+
 // Registers the panic handler that prints a backtrace over UART.
 use esp_backtrace as _;
 

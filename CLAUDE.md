@@ -42,6 +42,15 @@ running plain `cargo build`/`clippy`/`fmt` there — Cargo resolves
 directory*, not `--manifest-path`, so invoking it from elsewhere silently
 skips that config and fails to build or link.
 
+**Flashed and boot-verified on a real ESP32-C3-DevKit-RUST-2** (`/dev/ttyACM0`
+on Linux). Two things only surfaced at that step, not from `cargo build` —
+see `lock-client/README.md` for the details: the firmware needs
+`esp_bootloader_esp_idf::esp_app_desc!()` in `main.rs` or `espflash` refuses
+to flash it, and `espflash` itself needed upgrading to 4.5.0 (the newest
+version still compatible with rustc 1.89) since 4.3.0 failed the flash step.
+Only boot has been verified this way — the Wiegand/TOTP/relay path is still
+only exercised by `core`'s unit tests, not against a real keypad.
+
 ## Build and Test Commands
 
 ```bash
