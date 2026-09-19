@@ -8,7 +8,10 @@ Two independent Rust crates (not a cargo workspace — each has its own
 `Cargo.toml` and is built with `--manifest-path`):
 
 - **lock-client**: TOTP code generation for the offline lock, using `totp_embed`
-  with SHA-1 for `no_std` compatibility. Cross-compiled for Raspberry Pi.
+  with SHA-1 for `no_std` compatibility. CI cross-compiles it for Raspberry Pi
+  (armv7-unknown-linux-gnueabihf) today; the chosen initial hardware target is
+  the **ESP32-C3-DevKit-RUST-2** (ESP32-C3-MINI-1, RISC-V, 2.4GHz Wi-Fi +
+  Bluetooth 5 LE, Li-Ion charging circuit) — see the note below.
 - **totp-server**: an axum service that issues one-time PINs to users who have
   authenticated against Keycloak. See `totp-server/README.md` for the API,
   configuration, and development environment.
@@ -20,6 +23,14 @@ PIN across by typing it in. The only thing they share is the TOTP secret.
 (RFC 6238 / Google Authenticator profile — see `lock-client/src/main.rs` and
 `totp-server/src/totp/mod.rs`), so the same secret produces the same PIN on
 both ends.
+
+**Known gap: hardware target mismatch.** `lock-client` currently builds as an
+ordinary `std` binary and CI cross-compiles it for armv7 Linux (Raspberry Pi).
+The actual lock hardware chosen is an ESP32-C3 (RISC-V), which is not that
+target — running there needs a `no_std` rework (e.g. `esp-hal`) targeting
+`riscv32imc-unknown-none-elf`, plus Wiegand input handling and relay/GPIO
+output to drive the physical lock (see `plywood-box/laatikko-ohje-ja-ostoslista.md`
+for the chosen keypad/lock hardware). None of this is implemented yet.
 
 ## Build and Test Commands
 

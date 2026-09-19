@@ -63,22 +63,35 @@ tarvita (varmista silti asennuksessa ettei vesi pääse valumaan suoraan
 kaapelin läpivientiin päin).
 
 **Huomio arkkitehtuuriin:** S601/S602 on *standalone*-kontrolleri, joka
-tarkistaa kortin/PIN-koodin omasta 2000 käyttäjän muististaan ja laukaisee
-relettä itse — se ei tiedä mitään TOTP:sta. Repon TOTP-pohjaisen,
-ajassa vaihtuvan koodin käyttämiseksi kaksi vaihtoehtoa:
+tarkistaisi kortin/PIN-koodin omasta 2000 käyttäjän muististaan ja laukaisisi
+relettä itse — se ei tiedä mitään TOTP:sta. Ratkaisu: näppäimistöä käytetään
+**Wiegand-ulostulolla varustettuna lukijana** (ei standalone-tilassa), ja
+Wiegand-data luetaan alla olevalla ESP32-C3-DevKit-RUST-2:lla, joka laskee
+TOTP:n `lock-client`illa ja ohjaa Asia-Teco-salpaa itse GPIO:lta. Tätä varten
+`lock-client`iin pitää vielä toteuttaa Wiegand-luku ja releohjaus (ei vielä
+tehty) — ks. `CLAUDE.md`:n "Known gap: hardware target mismatch".
 
-1. Käytetään näppäimistöä pelkkänä **Wiegand-ulostulolla varustettuna
-   lukijana/näppäimistönä** (ei standalone-tilassa), ja Wiegand-data luetaan
-   `lock-client`:ia ajavalla mikro-ohjaimella, joka laskee TOTP:n ja ohjaa
-   relettä itse GPIO:lta — tätä varten `lock-client`iin pitää vielä
-   toteuttaa Wiegand-luku ja releohjaus (ei vielä tehty).
-2. Käytetään laitetta standalone-tilassa kiinteällä/hallinnollisesti
-   vaihdettavalla PIN-koodilla ilman TOTP:a — yksinkertaisempi, mutta
-   poikkeaa README:n kuvaamasta TOTP-suunnitelmasta.
+### Ohjainelektroniikka
 
-**Kokonaisarvio muu materiaali (ilman lukkoa):** ~60–90 €
-Lukko ja näppäimistö on jo hankittu erikseen, hinta ei sisälly yllä olevaan
-materiaaliarvioon.
+| Tuote | Malli | Tekniset tiedot |
+|---|---|---|
+| Kehityslauta / mikro-ohjain (`lock-client`) | ESP32-C3-DevKit-RUST-2 | ESP32-C3-MINI-1-moduuli (RISC-V, yksiydin), 2,4 GHz Wi-Fi + Bluetooth 5 (LE), Li-Ion-akun latauspiiri, sisäänrakennettuja antureita, useimmat I/O-pinnit header-riveillä molemmin puolin, sopii breadboardille/jumpperijohdoilla prototypointiin |
+
+Integroitu Wi-Fi ja BLE kattavat kaksi README:n kolmesta mainitusta
+koodinvälitystavasta (näppäimistön lisäksi) samalla laudalla, jos niitä
+halutaan käyttää myöhemmin. Huom: lauta on RISC-V (`riscv32imc-*`), ei ARM —
+`lock-client`in nykyinen build kohdistuu armv7-Linuxiin (Raspberry Pi CI:ssä),
+joten ESP32-C3:lle ajaminen vaatii `no_std`-siirtymän (esim. `esp-hal`),
+ei vielä tehty.
+
+Wiegand-linjojen (D0/D1, tyypillisesti 5V logiikka) ja releen (12V puolella)
+liittäminen ESP32-C3:n 3,3V GPIO:hin vaatii todennäköisesti tasomuuntimen/
+optoerottimen — ei vielä valittu, lisätään ostoslistaan kun piirikaavio on
+suunniteltu.
+
+**Kokonaisarvio muu materiaali (ilman lukkoa ja elektroniikkaa):** ~60–90 €
+Lukko, näppäimistö ja kehityslauta on jo hankittu erikseen, hinta ei sisälly
+yllä olevaan materiaaliarvioon.
 
 ---
 
@@ -229,11 +242,11 @@ reunat imevät kosteutta ellei niitä käsitellä.
   ilman virtalähdettä kytkettynä) että virransyötön suunnittelussa —
   akun tyhjeneminen tarkoittaa laatikon jäämistä kiinni, ei auki.
 - LUCKING DOOR S601/S602 on IP68-luokiteltu standalone-kontrolleri, joten se
-  kestää ulkoasennuksen sellaisenaan. Jos koodintarkistus halutaan tehdä
-  repon TOTP-logiikalla eikä laitteen omalla staattisella
-  kortti/PIN-muistilla, näppäimistö pitää käyttää Wiegand-lukijana ja
-  TOTP-vertailu + releohjaus toteuttaa erikseen `lock-client`-puolella —
-  tätä ei ole vielä koodattu.
+  kestää ulkoasennuksen sellaisenaan. Koodintarkistus tehdään kuitenkin repon
+  TOTP-logiikalla laitteen oman staattisen kortti/PIN-muistin sijaan:
+  näppäimistöä käytetään Wiegand-lukijana, ja TOTP-vertailu + releohjaus
+  toteutetaan ESP32-C3-DevKit-RUST-2:lla `lock-client`-puolella — tätä ei ole
+  vielä koodattu, eikä Wiegand/rele-tasomuunnosta ole vielä suunniteltu.
 - Valepohjan tulee olla irrotettavissa ilman työkaluja tai vain kevyellä
   voimalla, huoltoa varten (patterin vaihto, elektroniikan tarkastus).
 - Jos säänkestävyys osoittautuu riittämättömäksi pelkällä tiivistenauhalla,

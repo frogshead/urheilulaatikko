@@ -15,6 +15,12 @@ edellinen koodi jos aikaikkuna kerennyt sulkeutua. Koodi voidaan välittää
 lukolle käyttämällä mekaanista näppäimistöä, Bluetooth Low Energy (BLE)
 komminikointia tai internetin yli jos mahdollista.
 
+Alkuvaiheen toteutusalustaksi on valittu **ESP32-C3-DevKit-RUST-2**
+(ESP32-C3-MINI-1-moduuli, RISC-V, 2,4 GHz Wi-Fi + Bluetooth 5 (LE), Li-Ion-akun
+latauspiiri, useimmat I/O-pinnit vedetty header-riveille molemmin puolin).
+Integroitu Wi-Fi ja BLE kattavat kaksi kolmesta yllä mainitusta
+koodinvälitystavasta samalla laudalla. Ks. `lock-client/`.
+
 ## Asiakassovellus
 
 Mobiilisovellus, toiminnallisuus kuten vuokrasähköpotkulaudoissa.
@@ -28,7 +34,7 @@ Sekä mahdollistten integraatioden toteuttamiseen.
 
 | Kansio          | Kuvaus |
 | --------------- | ------ |
-| `lock-client/`  | Lukon puolen TOTP-laskenta (`totp_embed`, `no_std`), ristiinkäännetään Raspberry Pi:lle |
+| `lock-client/`  | Lukon puolen TOTP-laskenta (`totp_embed`, `no_std`). CI ristiinkääntää sen toistaiseksi Raspberry Pi:lle (armv7); alkuvaiheen kohdelaitteistoksi on valittu ESP32-C3-DevKit-RUST-2, mikä vaatii vielä siirtymän RISC-V/`no_std`-kohdealustalle |
 | `totp-server/`  | Palvelin, joka jakaa PIN-koodit Keycloak-autentikoinnin perusteella — ks. [totp-server/README.md](totp-server/README.md) |
 
 Palvelimen käyttöönotto lyhyesti:
