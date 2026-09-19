@@ -4,14 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Two independent Rust crates (not a cargo workspace — each has its own
-`Cargo.toml` and is built with `--manifest-path`):
+Two top-level projects, each with its own `Cargo.toml`/workspace and built
+with `--manifest-path` (not one shared workspace):
 
-- **lock-client**: TOTP code generation for the offline lock, using `totp_embed`
-  with SHA-1 for `no_std` compatibility. CI cross-compiles it for Raspberry Pi
-  (armv7-unknown-linux-gnueabihf) today; the chosen initial hardware target is
-  the **ESP32-C3-DevKit-RUST-2** (ESP32-C3-MINI-1, RISC-V, 2.4GHz Wi-Fi +
-  Bluetooth 5 LE, Li-Ion charging circuit) — see the note below.
+- **lock-client**: runs on the offline lock. A two-crate Cargo workspace
+  (`lock-client/Cargo.toml`, `default-members = ["core"]`):
+  - `lock-client/core`: hardware-independent logic (Wiegand frame decoding,
+    PIN buffering, TOTP verification, the lock's state machine). Plain
+    `#![no_std]` with `std` available under `cfg(test)`; this is what
+    `cargo test` exercises, no hardware or embedded toolchain needed.
+  - `lock-client/firmware`: the actual `no_std` binary for the
+    **ESP32-C3-DevKit-RUST-2** (ESP32-C3-MINI-1, RISC-V,
+    `riscv32imc-unknown-none-elf`), built on `esp-hal`. Wires `core`'s logic
+    to real GPIO interrupts, a monotonic timer, and a relay output.
+  - See `lock-client/README.md` for the architecture diagram and known
+    limitations (no persistent time source, no NVS-provisioned secret yet,
+    unverified Wiegand wire-format assumptions, no level-shifting design).
 - **totp-server**: an axum service that issues one-time PINs to users who have
   authenticated against Keycloak. See `totp-server/README.md` for the API,
   configuration, and development environment.
@@ -20,28 +28,35 @@ The two ends never talk to each other. The lock is offline; the user carries the
 PIN across by typing it in. The only thing they share is the TOTP secret.
 
 **Algorithms are aligned:** both sides use SHA-1, 6 digits, 30-second steps
-(RFC 6238 / Google Authenticator profile — see `lock-client/src/main.rs` and
-`totp-server/src/totp/mod.rs`), so the same secret produces the same PIN on
-both ends.
+(RFC 6238 / Google Authenticator profile — see `lock-client/core/src/totp.rs`
+and `totp-server/src/totp/mod.rs`), so the same secret produces the same PIN
+on both ends.
 
-**Known gap: hardware target mismatch.** `lock-client` currently builds as an
-ordinary `std` binary and CI cross-compiles it for armv7 Linux (Raspberry Pi).
-The actual lock hardware chosen is an ESP32-C3 (RISC-V), which is not that
-target — running there needs a `no_std` rework (e.g. `esp-hal`) targeting
-`riscv32imc-unknown-none-elf`, plus Wiegand input handling and relay/GPIO
-output to drive the physical lock (see `plywood-box/laatikko-ohje-ja-ostoslista.md`
-for the chosen keypad/lock hardware). None of this is implemented yet.
+**Toolchain note:** `lock-client/firmware`'s `esp-hal` dependency stack is
+pinned to exact versions (see its Cargo.toml) because newer releases require
+rustc 1.95, ahead of the 1.89 toolchain this was built and verified against.
+Also note: firmware must be built by `cd`-ing into `lock-client/firmware` and
+running plain `cargo build`/`clippy`/`fmt` there — Cargo resolves
+`.cargo/config.toml` (which sets the RISC-V target and a linker flag
+`esp-hal`'s generated linker script needs) relative to the *working
+directory*, not `--manifest-path`, so invoking it from elsewhere silently
+skips that config and fails to build or link.
 
 ## Build and Test Commands
 
 ```bash
-# Build
+# Build (lock-client: builds `core`, the workspace default member — host-only)
 cargo build --manifest-path ./lock-client/Cargo.toml
 cargo build --manifest-path ./totp-server/Cargo.toml
 
-# Test (server: unit tests + wiremock-backed introspection tests, no Docker)
+# Test (lock-client/core: pure logic; server: unit + wiremock introspection
+# tests. Neither needs Docker or an embedded toolchain)
 cargo test --manifest-path ./lock-client/Cargo.toml
 cargo test --manifest-path ./totp-server/Cargo.toml
+
+# ESP32-C3 firmware — must run from within the directory, see the toolchain
+# note above
+( cd lock-client/firmware && rustup target add riscv32imc-unknown-none-elf && cargo build --release )
 
 # Server integration tests against real Postgres and Keycloak containers.
 # These are #[ignore]d by default and need a working Docker daemon.
@@ -50,6 +65,9 @@ cargo test --manifest-path ./totp-server/Cargo.toml --test e2e_integration -- --
 # Lints that CI enforces
 cargo fmt --manifest-path ./totp-server/Cargo.toml --check
 cargo clippy --manifest-path ./totp-server/Cargo.toml --all-targets -- -D warnings
+cargo fmt --manifest-path ./lock-client/core/Cargo.toml --check
+cargo clippy --manifest-path ./lock-client/core/Cargo.toml --all-targets -- -D warnings
+( cd lock-client/firmware && cargo fmt --check && cargo clippy --release -- -D warnings )
 ```
 
 ### Development environment
@@ -65,16 +83,20 @@ docker compose up -d --build   # postgres + keycloak + totp-server
 If a default host port is taken, override `POSTGRES_PORT`, `KEYCLOAK_PORT`, or
 `TOTP_SERVER_PORT` in `.env`.
 
-### Cross-compilation for Raspberry Pi
-
-```bash
-cargo binstall --no-confirm cross
-cross build --release --manifest-path ./lock-client/Cargo.toml --target armv7-unknown-linux-gnueabihf
-```
-
-Binary lands at `lock-client/target/armv7-unknown-linux-gnueabihf/release/lock-client`.
-
 ## Architecture Notes
+
+### lock-client
+
+`firmware::wiegand_capture` timestamps raw D0/D1 pulses in a GPIO interrupt
+handler (edges are microsecond-scale; a polling loop could not catch them
+reliably) and hands a completed bit sequence to `core::wiegand::decode_frame`
+once a message-gap timeout elapses. From there `core::lock::LockController`
+buffers digits (`core::pin_entry`) and checks a completed code against
+`core::totp` — none of this middle layer touches hardware, which is what
+makes it unit-testable. `firmware::actuator::BoltActuator` is the only thing
+that actually drives a GPIO pin.
+
+### Server
 
 ### Server
 
@@ -115,5 +137,8 @@ Invariants worth preserving when changing this code:
 
 1. **build_server**: build, `cargo fmt --check`, clippy with `-D warnings`, tests.
 2. **integration_test_server**: the `#[ignore]`d testcontainers tests.
-3. **build_client**: build and test natively, cross-compile for armv7, upload
-   the Raspberry Pi binary as an artifact.
+3. **build_client_core**: builds/tests/lints `lock-client`'s `core` crate on
+   the host.
+4. **build_client_firmware**: builds/lints the ESP32-C3 firmware (from within
+   `lock-client/firmware/`, per the toolchain note above) and uploads the
+   resulting ELF as an artifact.

@@ -1,0 +1,13 @@
+[build]
+target = "riscv32imc-unknown-none-elf"
+
+[target.riscv32imc-unknown-none-elf]
+runner = "espflash flash --monitor"
+# esp-hal's build script copies its linker scripts (memory map, vector table,
+# section layout) into OUT_DIR and adds it to the link search path, but
+# something still has to tell the linker to actually use `linkall.x`, the
+# script that pulls in all of the others for this chip.
+rustflags = ["-C", "link-arg=-Tlinkall.x"]
+
+[env]
+ESP_LOG = "INFO"

@@ -1,0 +1,25 @@
+[package]
+name = "lock-client-firmware"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "lock-client-firmware"
+path = "src/main.rs"
+test = false
+doctest = false
+
+[dependencies]
+lock-client-core = { path = "../core" }
+# Pinned to exact versions: newer esp-hal releases (and their esp-riscv-rt /
+# esp-rom-sys / esp-sync / esp-config transitive deps) require rustc 1.95,
+# ahead of the 1.89 toolchain this was developed and verified against.
+esp-hal = { version = "=1.1.2", features = ["esp32c3", "unstable"] }
+esp-backtrace = { version = "=0.19.0", features = ["esp32c3", "panic-handler", "println"] }
+esp-println = { version = "=0.17.0", features = ["esp32c3"] }
+critical-section = "1.2"
+heapless = { version = "0.9", default-features = false }
+
+[profile.release]
+opt-level = "s"
+lto = true

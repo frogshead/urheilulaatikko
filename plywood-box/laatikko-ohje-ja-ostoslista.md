@@ -67,9 +67,11 @@ tarkistaisi kortin/PIN-koodin omasta 2000 käyttäjän muististaan ja laukaisisi
 relettä itse — se ei tiedä mitään TOTP:sta. Ratkaisu: näppäimistöä käytetään
 **Wiegand-ulostulolla varustettuna lukijana** (ei standalone-tilassa), ja
 Wiegand-data luetaan alla olevalla ESP32-C3-DevKit-RUST-2:lla, joka laskee
-TOTP:n `lock-client`illa ja ohjaa Asia-Teco-salpaa itse GPIO:lta. Tätä varten
-`lock-client`iin pitää vielä toteuttaa Wiegand-luku ja releohjaus (ei vielä
-tehty) — ks. `CLAUDE.md`:n "Known gap: hardware target mismatch".
+TOTP:n `lock-client`illa ja ohjaa Asia-Teco-salpaa itse GPIO:lta. Tämä on nyt
+toteutettu `lock-client/`-hakemistossa (Wiegand-luku, TOTP-vertailu,
+releohjaus) — ks. [lock-client/README.md](../lock-client/README.md) tunnetuista
+rajoituksista (mm. Wiegand-koodauksen oletukset eivät ole vielä varmennettuja
+oikeaa laitetta vasten, eikä tasomuunninta ole vielä valittu, ks. alla).
 
 ### Ohjainelektroniikka
 
@@ -79,10 +81,7 @@ tehty) — ks. `CLAUDE.md`:n "Known gap: hardware target mismatch".
 
 Integroitu Wi-Fi ja BLE kattavat kaksi README:n kolmesta mainitusta
 koodinvälitystavasta (näppäimistön lisäksi) samalla laudalla, jos niitä
-halutaan käyttää myöhemmin. Huom: lauta on RISC-V (`riscv32imc-*`), ei ARM —
-`lock-client`in nykyinen build kohdistuu armv7-Linuxiin (Raspberry Pi CI:ssä),
-joten ESP32-C3:lle ajaminen vaatii `no_std`-siirtymän (esim. `esp-hal`),
-ei vielä tehty.
+halutaan käyttää myöhemmin.
 
 Wiegand-linjojen (D0/D1, tyypillisesti 5V logiikka) ja releen (12V puolella)
 liittäminen ESP32-C3:n 3,3V GPIO:hin vaatii todennäköisesti tasomuuntimen/
@@ -244,9 +243,11 @@ reunat imevät kosteutta ellei niitä käsitellä.
 - LUCKING DOOR S601/S602 on IP68-luokiteltu standalone-kontrolleri, joten se
   kestää ulkoasennuksen sellaisenaan. Koodintarkistus tehdään kuitenkin repon
   TOTP-logiikalla laitteen oman staattisen kortti/PIN-muistin sijaan:
-  näppäimistöä käytetään Wiegand-lukijana, ja TOTP-vertailu + releohjaus
-  toteutetaan ESP32-C3-DevKit-RUST-2:lla `lock-client`-puolella — tätä ei ole
-  vielä koodattu, eikä Wiegand/rele-tasomuunnosta ole vielä suunniteltu.
+  näppäimistöä käytetään Wiegand-lukijana, ja TOTP-vertailu + releohjaus on
+  toteutettu ESP32-C3-DevKit-RUST-2:lla `lock-client`-puolella. Wiegand/rele
+  -tasomuunnosta (5V/3,3V/12V) ei ole vielä suunniteltu, eikä Wiegand-koodauksen
+  oletuksia ole varmennettu oikeaa keypadia vasten — ks.
+  `lock-client/README.md` tunnetuista rajoituksista.
 - Valepohjan tulee olla irrotettavissa ilman työkaluja tai vain kevyellä
   voimalla, huoltoa varten (patterin vaihto, elektroniikan tarkastus).
 - Jos säänkestävyys osoittautuu riittämättömäksi pelkällä tiivistenauhalla,

@@ -1,7 +1,9 @@
-[package]
-name = "lock-client"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+resolver = "2"
+members = ["core", "firmware"]
 
-[dependencies]
-totp_embed = "1.0.5"
+# `firmware` only builds for riscv32imc-unknown-none-elf (the ESP32-C3), so it
+# is excluded from a plain `cargo build`/`cargo test` run at the workspace
+# root — those commands target the host. Build it explicitly with
+# `cargo build -p lock-client-firmware --target riscv32imc-unknown-none-elf`.
+default-members = ["core"]

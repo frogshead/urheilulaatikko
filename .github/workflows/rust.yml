@@ -40,27 +40,47 @@ jobs:
     - name: Run integration tests
       run: cargo test --verbose --manifest-path ./totp-server/Cargo.toml --test e2e_integration -- --ignored
 
-  build_client:
-    name: Builds lock-client side code and does cross-compiling
+  build_client_core:
+    name: Builds and tests lock-client's hardware-independent logic
 
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    # `lock-client`'s workspace default-members is just `core` — the firmware
+    # crate only targets the ESP32-C3 and is built separately below. This
+    # runs on the host, no embedded toolchain needed.
     - name: Build
       run: cargo build --verbose --manifest-path ./lock-client/Cargo.toml
+    - name: Check formatting
+      run: cargo fmt --manifest-path ./lock-client/core/Cargo.toml --check
+    - name: Clippy
+      run: cargo clippy --manifest-path ./lock-client/core/Cargo.toml --all-targets -- -D warnings
     - name: Run tests
       run: cargo test --verbose --manifest-path ./lock-client/Cargo.toml
-    - name: Install Cross
-      shell: bash
-      run: |
-        curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-        cargo binstall --no-confirm cross
-    - name: Build for raspberry pi
-      run: cross build --release --verbose --manifest-path ./lock-client/Cargo.toml --target armv7-unknown-linux-gnueabihf
-    - name: Run tests for raspberry pi
-      run: cross test --verbose --manifest-path ./lock-client/Cargo.toml --target armv7-unknown-linux-gnueabihf
+
+  build_client_firmware:
+    name: Builds the ESP32-C3 firmware
+
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install the RISC-V target
+      run: rustup target add riscv32imc-unknown-none-elf
+    # Run from within `firmware/` (not via --manifest-path) so Cargo picks up
+    # `firmware/.cargo/config.toml`, which sets the target and the linker
+    # flag esp-hal's generated linker script needs — both are resolved
+    # relative to the working directory, not the manifest path.
+    - name: Check formatting
+      working-directory: ./lock-client/firmware
+      run: cargo fmt --check
+    - name: Clippy
+      working-directory: ./lock-client/firmware
+      run: cargo clippy --release -- -D warnings
+    - name: Build
+      working-directory: ./lock-client/firmware
+      run: cargo build --release --verbose
     - name: upload artifact
       uses: actions/upload-artifact@v4
       with:
-         name: raspberry pi executable
-         path: ./**/target/*/release/lock-client
+         name: esp32c3 firmware
+         path: ./lock-client/target/riscv32imc-unknown-none-elf/release/lock-client-firmware
