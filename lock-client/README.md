@@ -39,8 +39,7 @@ workspaces share one build output directory — the firmware ELF lands at
 regardless of which member directory you build from.
 
 Flashing needs [`espflash`](https://github.com/esp-rs/espflash) — install
-with `cargo install espflash --locked` (a version compatible with the pinned
-toolchain; see the note below). From `firmware/`:
+with `cargo install espflash --locked`. From `firmware/`:
 
 ```bash
 espflash flash --port /dev/ttyACM0 ../target/riscv32imc-unknown-none-elf/release/lock-client-firmware
@@ -52,25 +51,27 @@ USB-JTAG/Serial, shows up as `/dev/ttyACM0` on Linux) and confirmed to boot
 past the ESP-IDF second-stage bootloader into the app, print `lock-client
 ready`, and then sit idle without panicking or reboot-looping — expected,
 since nothing prints again until a Wiegand frame arrives. Two things only
-showed up at this step, not from `cargo build`:
+showed up at that step, not from `cargo build`, and are worth knowing if
+`espflash` ever mysteriously refuses to flash again:
 
 - **`esp_bootloader_esp_idf::esp_app_desc!()` is required.** Without it,
   `espflash flash` refuses with a missing-app-descriptor error — the
   bootloader validates this before accepting an image. It's a one-line macro
   call in `main.rs`; `cargo build` doesn't check for it, only the flash tool
   does.
-- **`espflash` needs upgrading past whatever the OS/package manager ships.**
-  4.3.0 connected to the board fine but failed the actual flash step with an
-  opaque `No such file or directory` error; upgrading to `4.5.0` (the newest
-  version still compatible with rustc 1.89 — `4.6.0` needs 1.95) fixed it.
+- **An outdated `espflash` can fail the flash step with an opaque error**
+  (`No such file or directory`, no further detail) even after connecting to
+  the board successfully. If flashing fails like that, `cargo install
+  espflash --locked` to get current, first.
 
-**Toolchain note:** the `esp-hal` dependency stack is pinned to exact versions
-(`esp-hal =1.1.2`, `esp-backtrace =0.19.0`, `esp-println =0.17.0`,
-`esp-bootloader-esp-idf =0.5.0`, plus a downgrade of the transitive
-`esp-rom-sys` to 0.1.4) because newer releases require rustc 1.95, ahead of
-the 1.89 toolchain this was built and verified against. Bumping these is fine
-once the project's toolchain moves past 1.95 — just re-check that
-`cargo build --release` (from `firmware/`) still links and flashes.
+**Toolchain note:** `esp-hal` and its companion crates
+(`esp-backtrace`/`esp-println`/`esp-bootloader-esp-idf`) track their latest
+releases — no version pins. That wasn't always true: while the toolchain here
+was rustc 1.89, several of these needed pinning to older releases because
+newer ones required rustc 1.95. If `cargo build` in `firmware/` ever starts
+complaining about the installed rustc being too old for a dependency, either
+`rustup update` or pin the offending crates back down — check with `cargo
+build` first, since which crates are affected shifts as the ecosystem moves.
 
 ## How it fits together
 

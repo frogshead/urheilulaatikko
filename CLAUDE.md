@@ -32,24 +32,30 @@ PIN across by typing it in. The only thing they share is the TOTP secret.
 and `totp-server/src/totp/mod.rs`), so the same secret produces the same PIN
 on both ends.
 
-**Toolchain note:** `lock-client/firmware`'s `esp-hal` dependency stack is
-pinned to exact versions (see its Cargo.toml) because newer releases require
-rustc 1.95, ahead of the 1.89 toolchain this was built and verified against.
-Also note: firmware must be built by `cd`-ing into `lock-client/firmware` and
-running plain `cargo build`/`clippy`/`fmt` there — Cargo resolves
-`.cargo/config.toml` (which sets the RISC-V target and a linker flag
-`esp-hal`'s generated linker script needs) relative to the *working
-directory*, not `--manifest-path`, so invoking it from elsewhere silently
-skips that config and fails to build or link.
+**Toolchain note:** `lock-client/firmware`'s `esp-hal`/`esp-backtrace`/
+`esp-println`/`esp-bootloader-esp-idf` dependencies track latest, unpinned.
+They needed exact-version pins for a while when the toolchain here was rustc
+1.89 (several newer releases require 1.95) — if `cargo build` in
+`lock-client/firmware` ever complains the installed rustc is too old for a
+dependency, either `rustup update` or pin the offending crate(s) back down;
+see `lock-client/README.md` for the full story. Separately: firmware must be
+built by `cd`-ing into `lock-client/firmware` and running plain `cargo
+build`/`clippy`/`fmt` there — Cargo resolves `.cargo/config.toml` (which sets
+the RISC-V target and a linker flag `esp-hal`'s generated linker script
+needs) relative to the *working directory*, not `--manifest-path`, so
+invoking it from elsewhere silently skips that config and fails to build or
+link.
 
 **Flashed and boot-verified on a real ESP32-C3-DevKit-RUST-2** (`/dev/ttyACM0`
-on Linux). Two things only surfaced at that step, not from `cargo build` —
-see `lock-client/README.md` for the details: the firmware needs
+on Linux), both with the original rustc-1.89-pinned dependency set and again
+after bumping everything to latest once the toolchain moved to 1.98. Two
+things only surfaced at the flashing step, not from `cargo build` — see
+`lock-client/README.md`: the firmware needs
 `esp_bootloader_esp_idf::esp_app_desc!()` in `main.rs` or `espflash` refuses
-to flash it, and `espflash` itself needed upgrading to 4.5.0 (the newest
-version still compatible with rustc 1.89) since 4.3.0 failed the flash step.
-Only boot has been verified this way — the Wiegand/TOTP/relay path is still
-only exercised by `core`'s unit tests, not against a real keypad.
+to flash it, and an outdated `espflash` can fail the flash step with an
+opaque error even after connecting to the board fine. Only boot has been
+verified this way — the Wiegand/TOTP/relay path is still only exercised by
+`core`'s unit tests, not against a real keypad.
 
 ## Build and Test Commands
 
