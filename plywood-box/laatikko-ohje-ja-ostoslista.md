@@ -46,13 +46,39 @@ Ulkomitat 100 × 50 × 50 cm (leveys × syvyys × korkeus). Vastaa OpenSCAD-mall
 
 ### Lukkomekanismi
 
-| Tuote | Hinta (arvio) | Lähde |
-|---|---|---|
-| Secukey XK1, IP66, Wiegand-näppäimistö | 130,90 € | Taloon.com / Netrauta.fi |
-| Sähkösalpalukko (electric strike), 12V, ulkokäyttöön | 30–80 € | Sama kauppa tai K-Rauta |
+Tilattu ja saapunut (AliExpress), hinnat tilausvahvistuksesta:
 
-**Kokonaisarvio ilman lukkoa:** ~60–90 €
-**Kokonaisarvio lukon kanssa:** ~220–290 €
+| Tuote | Malli | Tekniset tiedot |
+|---|---|---|
+| RFID + koodinäppäimistö (standalone access-kontrolleri) | LUCKING DOOR S601/S602 | **IP68**, sinkkiseos-kotelo (vandaalinkestävä), 125kHz EM- ja 13,56MHz Mifare-kortit, kortti/PIN/kortti+PIN, Wiegand 26 sisään- ja ulostulo, DC 12V, virrankulutus ~30mA, käyttäjäkapasiteetti 2000, lukon rele max 3A (oikosulkusuojattu), hälytysrele max 20A, ovirele säädettävä 0–99s, hälytysaika säädettävä 0–3min, taustavalaistu näppäimistö, summeri, käyttölämpötila −45…60 °C, koko 120×76×20mm |
+| Electric drop bolt -lukko (upotettava, moottoroitu salpa) | Asia-Teco B6L-NC / B7L-NC, **fail-secure (NC)** | DC 12V, käynnistysvirta 1,1A / pitovirta 0,14A, viive säädettävä 0/3/6s, palautesignaali (feedback), alumiiniseos, 200×28×38mm |
+
+Lukon **NC-versio on fail-secure**: salpa pysyy lukossa ilman virtaa ja avautuu
+vain kun ohjaimelta tulee virta — säilytyslaatikkoon oikea valinta, koska
+sähkökatko ei itsestään avaa lukkoa. Kontrollerin lukon relelähtö (max 3A)
+kattaa salvan käynnistysvirran (1,1A) reilusti, joten erillistä
+apurelettä ei tarvita. IP68-luokitus tekee näppäimistöstä sellaisenaan
+säänkestävän ulkoasennukseen, joten erillistä sadesuojaa ei välttämättä
+tarvita (varmista silti asennuksessa ettei vesi pääse valumaan suoraan
+kaapelin läpivientiin päin).
+
+**Huomio arkkitehtuuriin:** S601/S602 on *standalone*-kontrolleri, joka
+tarkistaa kortin/PIN-koodin omasta 2000 käyttäjän muististaan ja laukaisee
+relettä itse — se ei tiedä mitään TOTP:sta. Repon TOTP-pohjaisen,
+ajassa vaihtuvan koodin käyttämiseksi kaksi vaihtoehtoa:
+
+1. Käytetään näppäimistöä pelkkänä **Wiegand-ulostulolla varustettuna
+   lukijana/näppäimistönä** (ei standalone-tilassa), ja Wiegand-data luetaan
+   `lock-client`:ia ajavalla mikro-ohjaimella, joka laskee TOTP:n ja ohjaa
+   relettä itse GPIO:lta — tätä varten `lock-client`iin pitää vielä
+   toteuttaa Wiegand-luku ja releohjaus (ei vielä tehty).
+2. Käytetään laitetta standalone-tilassa kiinteällä/hallinnollisesti
+   vaihdettavalla PIN-koodilla ilman TOTP:a — yksinkertaisempi, mutta
+   poikkeaa README:n kuvaamasta TOTP-suunnitelmasta.
+
+**Kokonaisarvio muu materiaali (ilman lukkoa):** ~60–90 €
+Lukko ja näppäimistö on jo hankittu erikseen, hinta ei sisälly yllä olevaan
+materiaaliarvioon.
 
 ---
 
@@ -144,9 +170,11 @@ reunat imevät kosteutta ellei niitä käsitellä.
 
 1. Liimaa ja ruuvaa saranan vahvistuslista (18×30×1000mm) kannen
    **alapintaan**, takareunan kohdalle (ks. malli `flat_lid`).
-2. Poraa lukkomekanismin kiinnitysreiät (5mm) kannen alapintaan
-   etureunan lähelle, hasp/salpalukon kiinnitystä varten
-   (ks. malli, reikäväli 40mm).
+2. Poraa lukkomekanismin kiinnitysreiät kannen alapintaan etureunan
+   lähelle Asia-Teco-salvan (200×28×38mm) rungon mukaan. **Mittaa reikäväli
+   suoraan salvan mukana tulevasta asennuspohjasta/-ohjeesta** — mallin
+   40mm-oletus oli laskettu geneeriselle hasp-lukolle, ei tälle
+   drop bolt -mallille.
 
 ### Vaihe 8 — Tiivistys
 
@@ -166,12 +194,19 @@ reunat imevät kosteutta ellei niitä käsitellä.
 
 ### Vaihe 10 — Lukkomekanismin asennus
 
-1. Asenna hasp/salpalukon toinen puoli kannen alapinnan
-   kiinnitysreikiin (vaihe 7).
-2. Asenna vastakappale (Secukey XK1 + sähkösalpalukko) rungon
-   etuseinään ulkopuolelle, kohtisuoraan hasp-kiinnityksen alle.
-3. Vedä keypadin kaapeli takaseinän läpivientiholkin kautta
-   sisälle elektroniikkakoteloon (valepohjan alle).
+1. Asenna Asia-Teco-drop bolt -lukko kannen alapinnan kiinnitysreikiin
+   (vaihe 7).
+2. Poraa/jyrsi vastakappaleeksi reikä rungon etuseinän yläreunaan,
+   kohtisuoraan salvan pultin alle, niin että pultti työntyy siihen kannen
+   ollessa kiinni. Tarkista pultin heittopituus ja -suunta salvan
+   asennusohjeesta ennen poraamista.
+3. Asenna LUCKING DOOR S601/S602 -näppäimistö rungon etuseinään
+   ulkopuolelle. **Testaa lukon toiminta virtalähteen kanssa ennen kuin
+   suljet kantta** — salpa on fail-secure (NC), joten väärin kytkettynä tai
+   ilman virtaa se pysyy lukossa eikä laatikkoon pääse enää käsiksi.
+4. Vedä näppäimistön kaapeli takaseinän läpivientiholkin kautta sisälle
+   elektroniikkakoteloon (valepohjan alle), ja kytke salvan johdot
+   näppäimistön lukon relelähtöön (ks. laitteiden omat kytkentäkaaviot).
 
 ### Vaihe 11 — Viimeistely
 
@@ -184,9 +219,21 @@ reunat imevät kosteutta ellei niitä käsitellä.
 
 ## 4. Huomioita
 
-- Sarana ja lukko toimivat pinta-asennettuina — molemmat vahvistuslistat
-  (rungossa ja kannessa) antavat riittävän tartuntapinnan ohuelle 15mm
-  levylle.
+- Sarana toimii pinta-asennettuna, vahvistuslista antaa riittävän
+  tartuntapinnan ohuelle 15mm levylle. Asia-Teco-salpa sen sijaan on
+  upotettava/moottoroitu drop bolt -lukko, ei pinta-asenteinen hasp —
+  vastakappaleeksi tarvitaan reikä rungon etuseinään (ks. vaihe 10),
+  ei pelkkää ruuvattavaa metallilenkkiä.
+- Salpa on tilattu **fail-secure (NC)** -versiona: se pysyy lukossa ilman
+  virtaa. Muista tämä sekä asennuksen testauksessa (älä jää lukkojen taakse
+  ilman virtalähdettä kytkettynä) että virransyötön suunnittelussa —
+  akun tyhjeneminen tarkoittaa laatikon jäämistä kiinni, ei auki.
+- LUCKING DOOR S601/S602 on IP68-luokiteltu standalone-kontrolleri, joten se
+  kestää ulkoasennuksen sellaisenaan. Jos koodintarkistus halutaan tehdä
+  repon TOTP-logiikalla eikä laitteen omalla staattisella
+  kortti/PIN-muistilla, näppäimistö pitää käyttää Wiegand-lukijana ja
+  TOTP-vertailu + releohjaus toteuttaa erikseen `lock-client`-puolella —
+  tätä ei ole vielä koodattu.
 - Valepohjan tulee olla irrotettavissa ilman työkaluja tai vain kevyellä
   voimalla, huoltoa varten (patterin vaihto, elektroniikan tarkastus).
 - Jos säänkestävyys osoittautuu riittämättömäksi pelkällä tiivistenauhalla,
