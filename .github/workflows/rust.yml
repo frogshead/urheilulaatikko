@@ -134,8 +134,12 @@ jobs:
     - name: Fetch and verify the ESP32-C6 mask ROM
       working-directory: esp32sim
       run: sh tools/fetch-rom-elfs.sh "$GITHUB_WORKSPACE/esp32sim-roms"
+    # --force: the cache step above restores ~/.cargo/bin/espflash from an
+    # earlier run with the same key, and `cargo install` otherwise refuses to
+    # overwrite a binary that's already there — found by the cache actually
+    # hitting on a second run, not on the first (cold-cache) one.
     - name: Install espflash
-      run: cargo install espflash@${{ env.ESPFLASH_VERSION }} --locked
+      run: cargo install espflash@${{ env.ESPFLASH_VERSION }} --locked --force
 
     # Boots the real firmware binary under esp32sim's instruction-level
     # emulation of the real mask ROM and ESP-IDF bootloader, scripts a
