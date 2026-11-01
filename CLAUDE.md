@@ -60,6 +60,21 @@ can fail the flash step with an opaque error even after connecting to the
 board fine. These are properties of the `esp-hal`/`espflash` toolchain, not
 of either chip specifically, so they still apply.
 
+**`cargo run --release` in `lock-client/firmware` now flashes via `probe-rs`**
+(`runner` in `.cargo/config.toml`), over the C6-DevKitC-1's built-in USB-JTAG
+— no separate debug probe. `probe-rs-espressif` (installed automatically
+with `probe-rs-tools`) uses `espflash`'s own IDF image-building code
+internally, so it still generates the bootloader/partition table itself;
+`espflash flash`/`espflash monitor` remain documented as a fallback that
+needs no JTAG setup. **This is unverified** — no board was connected when it
+was configured, so neither the udev rules nor an actual `probe-rs run`/
+`probe-rs gdb`/`probe-rs debug` session have been exercised against real
+silicon. One thing worth knowing either way: ESP32 RISC-V chips have no RTT
+hardware, so `esp_println`'s console output is not visible through
+`probe-rs attach` (which is RTT-only) — it still needs a separate serial
+connection (`espflash monitor` or any terminal), regardless of which tool
+flashed the chip. See `lock-client/README.md`, "Flashing and debugging".
+
 **The Wiegand/TOTP/relay path is verified in `lock-client/firmware/sim`**
 against [esp32sim](https://github.com/mikroverk/esp32sim), an
 instruction-level ESP32 emulator (a separate project, not vendored here; run

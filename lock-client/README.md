@@ -38,16 +38,71 @@ workspaces share one build output directory — the firmware ELF lands at
 `lock-client/target/riscv32imac-unknown-none-elf/release/lock-client-firmware`
 regardless of which member directory you build from.
 
-Flashing needs [`espflash`](https://github.com/esp-rs/espflash) — install
-with `cargo install espflash --locked`. From `firmware/`:
+### Flashing and debugging
+
+`firmware/.cargo/config.toml` sets `cargo run --release` (from `firmware/`) to
+flash and start the firmware via [`probe-rs`](https://probe.rs):
+
+```bash
+cargo install probe-rs-tools --locked   # ships `probe-rs`, `cargo-flash`, `cargo-embed`
+cd firmware
+cargo run --release
+```
+
+This uses the ESP32-C6-DevKitC-1's **built-in USB-JTAG interface** — the same
+USB port used for the console — so no separate debug probe hardware is
+needed. `probe-rs-espressif` (pulled in automatically; confirmed by its
+presence in `cargo install`'s build output) uses `espflash`'s own IDF
+image-building code internally, so it generates and flashes the bootloader
+and partition table itself, the same as `espflash flash` does — there's no
+separate merge/image-build step to run first.
+
+**Linux setup, one time:** `probe-rs` talks to the USB-JTAG interface
+directly (not through a serial device node), which needs udev rules:
+
+```bash
+curl -fsSL https://probe.rs/files/69-probe-rs.rules -o /tmp/69-probe-rs.rules
+sudo cp /tmp/69-probe-rs.rules /etc/udev/rules.d/
+sudo udevadm control --reload && sudo udevadm trigger
+```
+
+The rule grants access via `plugdev` group membership or (on a modern
+systemd-logind desktop) automatically to the active seat user. Confirm with
+`probe-rs list` — it should show the board without `sudo`.
+
+**Debugging** (breakpoints, stepping, register/memory inspection) goes
+through the same JTAG connection:
+
+```bash
+probe-rs debug --chip esp32c6 ../target/riscv32imac-unknown-none-elf/release/lock-client-firmware  # built-in CLI debugger
+probe-rs gdb --chip esp32c6   # starts a GDB server; connect with e.g. riscv32-esp-elf-gdb
+```
+
+**The console (`esp_println` output) is a separate connection either way,**
+probe-rs or not: ESP32 RISC-V chips have no RTT hardware (that's a Cortex-M/
+CoreSight feature), so `esp_println` writes to the USB-JTAG interface's plain
+serial side, not something `probe-rs attach` (RTT-only) can read. Open it
+with any serial terminal, same as before:
+
+```bash
+espflash monitor --port /dev/ttyACM0    # or picocom, minicom, screen, ...
+```
+
+Flashing works over plain serial too, without probe-rs or a JTAG connection
+at all — install with `cargo install espflash --locked`:
 
 ```bash
 espflash flash --port /dev/ttyACM0 ../target/riscv32imac-unknown-none-elf/release/lock-client-firmware
-espflash monitor --port /dev/ttyACM0    # interactive; needs a real terminal
+espflash monitor --port /dev/ttyACM0
 ```
 
-**Not yet flashed to a real ESP32-C6-DevKitC-1** — the switch from the earlier
-ESP32-C3-DevKit-RUST-2 target happened without one on hand; see
+`espflash` is also what `firmware/sim` uses to build the merged flash image
+the emulator boots from — that usage is unrelated to real hardware and
+unaffected by whichever tool you flash a real board with.
+
+**Not yet flashed to a real ESP32-C6-DevKitC-1 or debugged over probe-rs** —
+the switch from the earlier ESP32-C3-DevKit-RUST-2 target happened without
+one on hand, and no board was connected when probe-rs was set up either; see
 [`sim/`](firmware/sim) for what *has* been verified, on an emulated C6, and
 the "Known limitations" section below. The C3 board this ran on previously
 did confirm two things worth knowing if `espflash` ever mysteriously refuses
@@ -58,7 +113,7 @@ to flash this firmware again, since they're properties of the `esp-hal`/
   `espflash flash` refuses with a missing-app-descriptor error — the
   bootloader validates this before accepting an image. It's a one-line macro
   call in `main.rs`; `cargo build` doesn't check for it, only the flash tool
-  does.
+  does. (`probe-rs`'s IDF loader checks for the same descriptor.)
 - **An outdated `espflash` can fail the flash step with an opaque error**
   (`No such file or directory`, no further detail) even after connecting to
   the board successfully. If flashing fails like that, `cargo install
@@ -162,3 +217,11 @@ they are never treated as a digit or as a wildcard match.
   — but that's not the same as either a real ESP32-C6 or a real Wiegand
   signal on real wires. The wire-format and level-shifting unknowns above are
   both still open precisely because of that gap.
+- **`probe-rs` is configured but unverified against real hardware**, for the
+  same reason: no board was connected when it was set up. `probe-rs list`
+  has not been run against a real ESP32-C6, the udev rules have not been
+  installed on this machine (install step above, skipped for now), and
+  `cargo run --release` has never actually flashed anything over JTAG. If it
+  doesn't connect, falling back to the plain `espflash flash`/`espflash
+  monitor` commands above rules out whether the problem is probe-rs/JTAG
+  setup specifically.

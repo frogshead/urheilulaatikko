@@ -2,7 +2,14 @@
 target = "riscv32imac-unknown-none-elf"
 
 [target.riscv32imac-unknown-none-elf]
-runner = "espflash flash --monitor"
+# `cargo run --release` now flashes and starts the program over probe-rs's
+# JTAG connection (the board's built-in USB-JTAG, no separate debug probe
+# needed) instead of espflash's serial bootloader protocol — see
+# "Flashing and debugging" in README.md for setup and for why the console
+# text (esp_println) still needs a separate serial connection either way.
+# `espflash flash --monitor ...` still works standalone if probe-rs isn't set
+# up; espflash also remains required for firmware/sim's emulator image.
+runner = "probe-rs run --chip esp32c6"
 # esp-hal's build script copies its linker scripts (memory map, vector table,
 # section layout) into OUT_DIR and adds it to the link search path, but
 # something still has to tell the linker to actually use `linkall.x`, the
