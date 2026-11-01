@@ -14,9 +14,11 @@ with `--manifest-path` (not one shared workspace):
     `#![no_std]` with `std` available under `cfg(test)`; this is what
     `cargo test` exercises, no hardware or embedded toolchain needed.
   - `lock-client/firmware`: the actual `no_std` binary for the
-    **ESP32-C3-DevKit-RUST-2** (ESP32-C3-MINI-1, RISC-V,
-    `riscv32imc-unknown-none-elf`), built on `esp-hal`. Wires `core`'s logic
-    to real GPIO interrupts, a monotonic timer, and a relay output.
+    **ESP32-C6-DevKitC-1** (RISC-V RV32IMAC,
+    `riscv32imac-unknown-none-elf`), built on `esp-hal`. Wires `core`'s logic
+    to real GPIO interrupts, a monotonic timer, and a relay output. (An
+    earlier version of this crate targeted an ESP32-C3-DevKit-RUST-2; see
+    `lock-client/README.md` if you find stray references to that board.)
   - See `lock-client/README.md` for the architecture diagram and known
     limitations (no persistent time source, no NVS-provisioned secret yet,
     unverified Wiegand wire-format assumptions, no level-shifting design).
@@ -46,27 +48,34 @@ needs) relative to the *working directory*, not `--manifest-path`, so
 invoking it from elsewhere silently skips that config and fails to build or
 link.
 
-**Flashed and boot-verified on a real ESP32-C3-DevKit-RUST-2** (`/dev/ttyACM0`
-on Linux), both with the original rustc-1.89-pinned dependency set and again
-after bumping everything to latest once the toolchain moved to 1.98. Two
-things only surfaced at the flashing step, not from `cargo build` — see
-`lock-client/README.md`: the firmware needs
-`esp_bootloader_esp_idf::esp_app_desc!()` in `main.rs` or `espflash` refuses
-to flash it, and an outdated `espflash` can fail the flash step with an
-opaque error even after connecting to the board fine. Only boot has been
-verified this way.
+**Not yet flashed to a real ESP32-C6** — the switch away from the
+ESP32-C3-DevKit-RUST-2 happened without a C6 board on hand. The C3 board did
+confirm boot (`/dev/ttyACM0` on Linux), both with the original
+rustc-1.89-pinned dependency set and again after bumping everything to latest
+once the toolchain moved to 1.98, and surfaced two things worth knowing if
+`espflash` ever mysteriously refuses to flash this firmware again — see
+`lock-client/README.md`: it needs `esp_bootloader_esp_idf::esp_app_desc!()`
+in `main.rs` or `espflash` refuses to flash it, and an outdated `espflash`
+can fail the flash step with an opaque error even after connecting to the
+board fine. These are properties of the `esp-hal`/`espflash` toolchain, not
+of either chip specifically, so they still apply.
 
 **The Wiegand/TOTP/relay path is verified in `lock-client/firmware/sim`**
 against [esp32sim](https://github.com/mikroverk/esp32sim), an
 instruction-level ESP32 emulator (a separate project, not vendored here; run
 in CI by the `simulate_client_firmware` job at a pinned commit — see
 `lock-client/firmware/sim/README.md`). It boots the real firmware binary
-under the real mask ROM and bootloader, scripts a Wiegand keypad entry on
-GPIO2/3, and checks the relay pin (GPIO4) over a VCD waveform: a correct TOTP
-code must unlock it for exactly `UNLOCK_DURATION` and relock, a wrong one
-must never touch it. This is real GPIO interrupts on an emulated chip, not
-the fake `Clock`/`Actuator` trait objects `core`'s unit
-tests use — but it is still not a real Wiegand signal on real wires.
+under the real mask ROM and bootloader as a bare module (`--board none`),
+scripts a Wiegand keypad entry on GPIO2/3, and checks the relay pin (GPIO10)
+over a VCD waveform: a correct TOTP code must unlock it for exactly
+`UNLOCK_DURATION` and relock, a wrong one must never touch it. This is real
+GPIO interrupts on an emulated chip, not the fake `Clock`/`Actuator` trait
+objects `core`'s unit tests use — but it is still not a real ESP32-C6 or a
+real Wiegand signal on real wires. (Porting this from the C3 to the C6 found
+a real esp32sim quirk worth knowing: a GPIO pin's `$var` only appears in a
+VCD once that pin actually changes level, so "absent from the VCD" and
+"present with zero transitions" have to be treated as the same thing — see
+`run_sim_tests.py`'s `parse_vcd_relay_transitions`.)
 
 ## Build and Test Commands
 
@@ -80,9 +89,9 @@ cargo build --manifest-path ./totp-server/Cargo.toml
 cargo test --manifest-path ./lock-client/Cargo.toml
 cargo test --manifest-path ./totp-server/Cargo.toml
 
-# ESP32-C3 firmware — must run from within the directory, see the toolchain
+# ESP32-C6 firmware — must run from within the directory, see the toolchain
 # note above
-( cd lock-client/firmware && rustup target add riscv32imc-unknown-none-elf && cargo build --release )
+( cd lock-client/firmware && rustup target add riscv32imac-unknown-none-elf && cargo build --release )
 
 # Wiegand/TOTP/relay integration test against the esp32sim emulator. CI runs
 # this too (simulate_client_firmware); locally it needs a one-time build of
@@ -168,12 +177,11 @@ Invariants worth preserving when changing this code:
 2. **integration_test_server**: the `#[ignore]`d testcontainers tests.
 3. **build_client_core**: builds/tests/lints `lock-client`'s `core` crate on
    the host.
-4. **build_client_firmware**: builds/lints the ESP32-C3 firmware (from within
+4. **build_client_firmware**: builds/lints the ESP32-C6 firmware (from within
    `lock-client/firmware/`, per the toolchain note above) and uploads the
    resulting ELF as an artifact.
 5. **simulate_client_firmware**: checks out `mikroverk/esp32sim` at a pinned
-   commit (`ESP32SIM_REF`), builds `esp32sim-c3`, fetches and SHA-256-verifies
+   commit (`ESP32SIM_REF`), builds `esp32sim-c6`, fetches and SHA-256-verifies
    the mask ROM, installs a pinned `espflash`, and runs
    `lock-client/firmware/sim/run_sim_tests.py` — see that directory's
    README.md for what it tests and how to bump the pinned versions.
-Run it by hand after touching the Wiegand/lock/actuator code.

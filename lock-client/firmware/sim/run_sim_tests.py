@@ -2,11 +2,11 @@
 """Integration tests for lock-client-firmware against the esp32sim emulator.
 
 Boots the real firmware image (mask ROM -> ESP-IDF bootloader -> our app,
-exactly as a real ESP32-C3 does) and drives its Wiegand D0/D1 pins with a
+exactly as a real ESP32-C6 does) and drives its Wiegand D0/D1 pins with a
 scripted keypad entry, instead of needing a real board:
 
-  - a code matching the current TOTP window must unlock the relay (GPIO4
-    goes high) for exactly UNLOCK_DURATION, then relock
+  - a code matching the current TOTP window must unlock the relay (the
+    RELAY_GPIO pin below) for exactly UNLOCK_DURATION, then relock
   - a wrong code must be rejected, and must never touch the relay pin
 
 This exercises the one part of lock-client that core's unit tests cannot:
@@ -14,8 +14,8 @@ the real GPIO interrupt handler in firmware/src/wiegand_capture.rs, run by
 an emulated chip, not a fake clock and a fake actuator.
 
 Requires (see sim/README.md to build these):
-  ESP32SIM_BIN       path to the esp32sim-c3 binary
-  ESP32SIM_ROM_DIR   directory containing esp32c3_rev3_rom.elf
+  ESP32SIM_BIN       path to the esp32sim-c6 binary
+  ESP32SIM_ROM_DIR   directory containing esp32c6_rev0_rom.elf
   espflash on PATH   `cargo install espflash --locked`
 
 Usage: python3 sim/run_sim_tests.py [--keep]
@@ -38,7 +38,8 @@ STEP_SECONDS = 30
 DIGITS = 6
 UNLOCK_DURATION = 5.0  # must match UNLOCK_DURATION in src/main.rs
 
-RELAY_PIN = "s4"  # gpio4 in the VCD, see wiegand_script.py's pin note
+CHIP = "esp32c6"
+RELAY_GPIO = 10  # must match the relay pin chosen in src/main.rs
 
 
 def run(cmd, **kwargs):
@@ -83,7 +84,7 @@ def build_firmware_and_flash_image(firmware_dir: Path, out_bin: Path, elf_path: 
             "espflash",
             "save-image",
             "--chip",
-            "esp32c3",
+            CHIP,
             "--merge",
             str(elf_path),
             str(out_bin),
@@ -93,12 +94,30 @@ def build_firmware_and_flash_image(firmware_dir: Path, out_bin: Path, elf_path: 
 
 
 def parse_vcd_relay_transitions(vcd_path: Path) -> list[tuple[float, str]]:
+    """Finds the VCD identifier esp32sim assigned to `gpioRELAY_GPIO` from the
+    `$var` header (it is not the same letter/number every run, so this can't
+    be hardcoded) and returns that signal's (time, level) transitions.
+
+    esp32sim registers a pin's `$var` lazily, the first time it actually
+    changes level — a pin that's configured but never driven (the relay, on
+    a rejected code) is simply absent from the header, not present with zero
+    transitions. Both cases mean the same thing here, so a missing `$var` is
+    not an error: it's reported as zero transitions, same as a `$var` with
+    none. A genuine RELAY_GPIO/main.rs mismatch still fails loudly — it would
+    make the *correct*-code run report zero transitions too, which the
+    caller already treats as a failure."""
+    want = f"gpio{RELAY_GPIO}"
+    relay_id = None
     transitions = []
     t_ps = 0
     for line in vcd_path.read_text().splitlines():
-        if line.startswith("#"):
+        if line.startswith("$var"):
+            parts = line.split()
+            if len(parts) >= 5 and parts[4] == want:
+                relay_id = parts[3]
+        elif line.startswith("#"):
             t_ps = int(line[1:])
-        elif line.endswith(RELAY_PIN) and line[0] in "01":
+        elif line[:1] in "01" and relay_id and line[1:] == relay_id:
             transitions.append((t_ps / 1e12, line[0]))
     return transitions
 
@@ -120,6 +139,8 @@ def run_emulator(
             "rom",
             "--flash-mb",
             "4",
+            "--board",
+            "none",  # a bare module — this project's lock is not that reference board
             "--flash-image",
             str(flash_image),
             "--elf",
@@ -163,7 +184,7 @@ def main() -> int:
     elf_path = (
         FIRMWARE_DIR.parent
         / "target"
-        / "riscv32imc-unknown-none-elf"
+        / "riscv32imac-unknown-none-elf"
         / "release"
         / "lock-client-firmware"
     )

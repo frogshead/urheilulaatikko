@@ -47,7 +47,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     # `lock-client`'s workspace default-members is just `core` — the firmware
-    # crate only targets the ESP32-C3 and is built separately below. This
+    # crate only targets the ESP32-C6 and is built separately below. This
     # runs on the host, no embedded toolchain needed.
     - name: Build
       run: cargo build --verbose --manifest-path ./lock-client/Cargo.toml
@@ -59,13 +59,13 @@ jobs:
       run: cargo test --verbose --manifest-path ./lock-client/Cargo.toml
 
   build_client_firmware:
-    name: Builds the ESP32-C3 firmware
+    name: Builds the ESP32-C6 firmware
 
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Install the RISC-V target
-      run: rustup target add riscv32imc-unknown-none-elf
+      run: rustup target add riscv32imac-unknown-none-elf
     # Run from within `firmware/` (not via --manifest-path) so Cargo picks up
     # `firmware/.cargo/config.toml`, which sets the target and the linker
     # flag esp-hal's generated linker script needs — both are resolved
@@ -82,8 +82,8 @@ jobs:
     - name: upload artifact
       uses: actions/upload-artifact@v4
       with:
-         name: esp32c3 firmware
-         path: ./lock-client/target/riscv32imc-unknown-none-elf/release/lock-client-firmware
+         name: esp32c6 firmware
+         path: ./lock-client/target/riscv32imac-unknown-none-elf/release/lock-client-firmware
 
   simulate_client_firmware:
     name: Runs the Wiegand/TOTP/relay integration test in esp32sim
@@ -112,7 +112,7 @@ jobs:
       with:
         python-version: '3.12'
     - name: Install the RISC-V target
-      run: rustup target add riscv32imc-unknown-none-elf
+      run: rustup target add riscv32imac-unknown-none-elf
 
     - name: Cache esp32sim's build, the mask ROM, and espflash
       uses: actions/cache@v4
@@ -124,13 +124,14 @@ jobs:
           ~/.cargo/registry
         key: esp32sim-${{ runner.os }}-${{ env.ESP32SIM_REF }}-${{ env.ESPFLASH_VERSION }}-${{ hashFiles('esp32sim/Cargo.lock') }}
 
-    - name: Build esp32sim-c3
+    - name: Build esp32sim-c6
       working-directory: esp32sim
-      run: cargo build --release --bin esp32sim-c3
+      run: cargo build --release --bin esp32sim-c6
     # Mask ROM ELFs (Apache-2.0, espressif/esp-rom-elfs), fetched by release
     # and SHA-256-verified by esp32sim's own script — see its comments for
-    # what a real upgrade involves.
-    - name: Fetch and verify the ESP32-C3 mask ROM
+    # what a real upgrade involves. Downloads the bundle for all chips, not
+    # just the C6, harmlessly.
+    - name: Fetch and verify the ESP32-C6 mask ROM
       working-directory: esp32sim
       run: sh tools/fetch-rom-elfs.sh "$GITHUB_WORKSPACE/esp32sim-roms"
     - name: Install espflash
@@ -138,12 +139,12 @@ jobs:
 
     # Boots the real firmware binary under esp32sim's instruction-level
     # emulation of the real mask ROM and ESP-IDF bootloader, scripts a
-    # Wiegand keypad entry on GPIO2/3, and checks the relay pin (GPIO4) over
+    # Wiegand keypad entry on GPIO2/3, and checks the relay pin (GPIO10) over
     # a VCD waveform — see sim/README.md for what this does and does not
     # prove relative to real hardware.
     - name: Run the sim integration test
       working-directory: ./lock-client/firmware
       env:
-        ESP32SIM_BIN: ${{ github.workspace }}/esp32sim/target/release/esp32sim-c3
+        ESP32SIM_BIN: ${{ github.workspace }}/esp32sim/target/release/esp32sim-c6
         ESP32SIM_ROM_DIR: ${{ github.workspace }}/esp32sim-roms
       run: python3 sim/run_sim_tests.py

@@ -1,7 +1,7 @@
 [build]
-target = "riscv32imc-unknown-none-elf"
+target = "riscv32imac-unknown-none-elf"
 
-[target.riscv32imc-unknown-none-elf]
+[target.riscv32imac-unknown-none-elf]
 runner = "espflash flash --monitor"
 # esp-hal's build script copies its linker scripts (memory map, vector table,
 # section layout) into OUT_DIR and adds it to the link search path, but

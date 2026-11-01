@@ -15,13 +15,15 @@ edellinen koodi jos aikaikkuna kerennyt sulkeutua. Koodi voidaan välittää
 lukolle käyttämällä mekaanista näppäimistöä, Bluetooth Low Energy (BLE)
 komminikointia tai internetin yli jos mahdollista.
 
-Alkuvaiheen toteutusalustaksi on valittu **ESP32-C3-DevKit-RUST-2**
-(ESP32-C3-MINI-1-moduuli, RISC-V, 2,4 GHz Wi-Fi + Bluetooth 5 (LE), Li-Ion-akun
-latauspiiri, useimmat I/O-pinnit vedetty header-riveille molemmin puolin).
-Integroitu Wi-Fi ja BLE kattavat kaksi kolmesta yllä mainitusta
-koodinvälitystavasta samalla laudalla. Ensimmäinen versio (Wiegand-näppäimistön
-luku, TOTP-vertailu, releohjaus) on toteutettu `lock-client/`-hakemistossa —
-ks. [lock-client/README.md](lock-client/README.md) yksityiskohdista ja
+Toteutusalustaksi on valittu **ESP32-C6-DevKitC-1** (ESP32-C6-WROOM-1(U)
+-moduuli, RISC-V RV32IMAC, Wi-Fi 6 + Bluetooth 5 (LE) + IEEE 802.15.4
+(Zigbee/Thread), useimmat I/O-pinnit vedetty header-riveille molemmin
+puolin). Integroitu Wi-Fi ja BLE kattavat kaksi kolmesta yllä mainitusta
+koodinvälitystavasta samalla laudalla, jos niitä halutaan käyttää myöhemmin.
+Ensimmäinen versio (Wiegand-näppäimistön luku, TOTP-vertailu, releohjaus) on
+toteutettu `lock-client/`-hakemistossa, aiemmin ESP32-C3-DevKit-RUST-2:lle ja
+nyt siirretty tähän C6-alustaan — ks.
+[lock-client/README.md](lock-client/README.md) yksityiskohdista ja
 tunnetuista rajoituksista.
 
 ## Asiakassovellus
@@ -37,7 +39,7 @@ Sekä mahdollistten integraatioden toteuttamiseen.
 
 | Kansio          | Kuvaus |
 | --------------- | ------ |
-| `lock-client/`  | Lukon puolen logiikka, cargo-workspace: `core/` (laitteistoriippumaton TOTP/Wiegand/lukko-FSM, testattu `cargo test`illa) + `firmware/` (ESP32-C3-DevKit-RUST-2:lle käännettävä `no_std`-binääri, ks. `lock-client/README.md`) |
+| `lock-client/`  | Lukon puolen logiikka, cargo-workspace: `core/` (laitteistoriippumaton TOTP/Wiegand/lukko-FSM, testattu `cargo test`illa) + `firmware/` (ESP32-C6-DevKitC-1:lle käännettävä `no_std`-binääri, testattu esp32sim-emulaattorissa, ks. `lock-client/README.md`) |
 | `totp-server/`  | Palvelin, joka jakaa PIN-koodit Keycloak-autentikoinnin perusteella — ks. [totp-server/README.md](totp-server/README.md) |
 
 Palvelimen käyttöönotto lyhyesti:

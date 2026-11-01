@@ -4,7 +4,7 @@ use lock_client_core::lock::Clock;
 /// Reconstructs wall-clock Unix time from a build-time epoch plus elapsed
 /// monotonic time since boot.
 ///
-/// **Known limitation:** the ESP32-C3 has no battery-backed RTC, and this
+/// **Known limitation:** the ESP32-C6 has no battery-backed RTC, and this
 /// project deliberately has no network time source — the lock is meant to
 /// keep working with no internet connection at all. So "now" here is only
 /// ever `build epoch + time since this boot`: a power loss resets the clock

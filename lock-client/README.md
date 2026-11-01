@@ -10,7 +10,7 @@ This is a two-crate Cargo workspace:
 | Crate | What it is |
 | --- | --- |
 | [`core/`](core) | Hardware-independent decision logic: Wiegand frame decoding, PIN buffering, TOTP verification, the lock's state machine. No `esp-hal`, no hardware — plain `#![no_std]` (with `std` available under `cfg(test)`), fully covered by `cargo test`. |
-| [`firmware/`](firmware) | The actual `no_std` binary for the **ESP32-C3-DevKit-RUST-2**. Wires `core`'s logic to real GPIO interrupts, a monotonic timer, and a relay output. |
+| [`firmware/`](firmware) | The actual `no_std` binary for the **ESP32-C6-DevKitC-1**. Wires `core`'s logic to real GPIO interrupts, a monotonic timer, and a relay output. |
 
 Splitting it this way means the part that actually decides "is this code
 correct" is tested the same way `totp-server`'s equivalent logic is — with
@@ -27,7 +27,7 @@ cargo test  --manifest-path ./Cargo.toml
 # firmware: must be run from within firmware/, not via --manifest-path — Cargo
 # resolves .cargo/config.toml (which sets the target and a required linker
 # flag) relative to the working directory, not the manifest path.
-rustup target add riscv32imc-unknown-none-elf
+rustup target add riscv32imac-unknown-none-elf
 cd firmware
 cargo build --release
 ```
@@ -35,24 +35,24 @@ cargo build --release
 The workspace has one shared `target/` directory at its root
 (`lock-client/target/`, not `lock-client/firmware/target/`), since Cargo
 workspaces share one build output directory — the firmware ELF lands at
-`lock-client/target/riscv32imc-unknown-none-elf/release/lock-client-firmware`
+`lock-client/target/riscv32imac-unknown-none-elf/release/lock-client-firmware`
 regardless of which member directory you build from.
 
 Flashing needs [`espflash`](https://github.com/esp-rs/espflash) — install
 with `cargo install espflash --locked`. From `firmware/`:
 
 ```bash
-espflash flash --port /dev/ttyACM0 ../target/riscv32imc-unknown-none-elf/release/lock-client-firmware
+espflash flash --port /dev/ttyACM0 ../target/riscv32imac-unknown-none-elf/release/lock-client-firmware
 espflash monitor --port /dev/ttyACM0    # interactive; needs a real terminal
 ```
 
-**This has been flashed to a real ESP32-C3-DevKit-RUST-2** (native
-USB-JTAG/Serial, shows up as `/dev/ttyACM0` on Linux) and confirmed to boot
-past the ESP-IDF second-stage bootloader into the app, print `lock-client
-ready`, and then sit idle without panicking or reboot-looping — expected,
-since nothing prints again until a Wiegand frame arrives. Two things only
-showed up at that step, not from `cargo build`, and are worth knowing if
-`espflash` ever mysteriously refuses to flash again:
+**Not yet flashed to a real ESP32-C6-DevKitC-1** — the switch from the earlier
+ESP32-C3-DevKit-RUST-2 target happened without one on hand; see
+[`sim/`](firmware/sim) for what *has* been verified, on an emulated C6, and
+the "Known limitations" section below. The C3 board this ran on previously
+did confirm two things worth knowing if `espflash` ever mysteriously refuses
+to flash this firmware again, since they're properties of the `esp-hal`/
+`espflash` toolchain rather than of either chip specifically:
 
 - **`esp_bootloader_esp_idf::esp_app_desc!()` is required.** Without it,
   `espflash flash` refuses with a missing-app-descriptor error — the
@@ -132,7 +132,7 @@ they are never treated as a digit or as a wildcard match.
 
 ## Known limitations (first pass — see the parts list for more)
 
-- **No persistent time source.** The ESP32-C3 has no battery-backed RTC, and
+- **No persistent time source.** The ESP32-C6 has no battery-backed RTC, and
   this project deliberately has no network time sync (the lock must work with
   no internet connection at all). `firmware::clock::SystemClock` reconstructs
   "now" as *build time + time since this boot* — a power loss resets the
@@ -148,14 +148,17 @@ they are never treated as a digit or as a wildcard match.
   5V logic and the relay side is 12V, against this chip's 3.3V GPIO — see the
   parts list (`plywood-box/laatikko-ohje-ja-ostoslista.md`) for the open note.
 - **Pin numbers in `firmware/src/main.rs` are placeholders** (GPIO2/3 for
-  D0/D1, GPIO4 for the relay). Update them to match the actual wiring.
-- **Real hardware has only verified boot.** Flashed to a real board and
-  confirmed it reaches `lock-client ready` and stays stable with nothing
-  connected to GPIO2/3/4 — see the flashing notes above.
-- **The Wiegand/TOTP/relay path has been verified in [esp32sim](firmware/sim),
-  not against a real keypad.** The emulator confirmed a correct code unlocks
-  the relay for exactly `UNLOCK_DURATION` and a wrong one never touches it —
-  real GPIO interrupts on an emulated chip, not fakes — but that's not the
-  same as a real Wiegand signal on real wires. The wire-format and
-  level-shifting unknowns above are both still open precisely because of that
-  gap.
+  D0/D1, GPIO10 for the relay — chosen as plain, unrestricted pins on the
+  ESP32-C6-DevKitC-1; see the comment on the relay pin in `main.rs` for which
+  pins are strapping/JTAG/USB/UART and must be avoided if this ever changes).
+  Update them to match the actual wiring.
+- **Not yet verified on real hardware.** The switch to the ESP32-C6 happened
+  without a board on hand — see the flashing section above. What *has* been
+  verified is boot on the earlier ESP32-C3 board (same `esp-hal`/`espflash`
+  toolchain, different chip) and the full Wiegand/TOTP/relay path in
+  [esp32sim](firmware/sim), not against a real keypad. The emulator confirmed
+  a correct code unlocks the relay for exactly `UNLOCK_DURATION` and a wrong
+  one never touches it — real GPIO interrupts on an emulated chip, not fakes
+  — but that's not the same as either a real ESP32-C6 or a real Wiegand
+  signal on real wires. The wire-format and level-shifting unknowns above are
+  both still open precisely because of that gap.

@@ -67,7 +67,10 @@ fn main() -> ! {
     // match the actual connection to the LUCKING DOOR S601/S602 keypad, and
     // update these constants to match (see the parts list for the
     // level-shifting note: the keypad's Wiegand lines are commonly 5V logic
-    // against this chip's 3.3V GPIO).
+    // against this chip's 3.3V GPIO). GPIO2/3 are plain, unrestricted pins on
+    // the ESP32-C6-DevKitC-1 (confirmed against both the board's user guide
+    // and esp-hal's chip metadata — see the relay pin's comment below for
+    // the pins that are NOT safe to pick here).
     let d0 = Input::new(
         peripherals.GPIO2,
         InputConfig::default().with_pull(Pull::Up),
@@ -81,7 +84,14 @@ fn main() -> ! {
     // Drives the level-shifter/relay for the Asia-Teco drop bolt. Starts low
     // (locked); the bolt itself is fail-secure (NC), but the firmware should
     // never rely on that alone to keep the box shut on boot.
-    let relay = Output::new(peripherals.GPIO4, Level::Low, OutputConfig::default());
+    //
+    // GPIO10 is a plain, unrestricted pin on this board. GPIO4 (used here on
+    // the earlier ESP32-C3 build) is NOT safe on the C6: it's a strapping pin
+    // that also carries JTAG (MTMS), so driving it could change how the chip
+    // boots. GPIO8/9/15 are strapping-only, GPIO6/7/12/13 carry JTAG/USB
+    // debug, and GPIO16/17 are the UART console — avoid those for the same
+    // reason if this pin assignment ever needs to change again.
+    let relay = Output::new(peripherals.GPIO10, Level::Low, OutputConfig::default());
     let mut actuator = BoltActuator::new(relay);
 
     let clock = SystemClock::start();

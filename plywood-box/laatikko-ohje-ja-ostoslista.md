@@ -66,27 +66,32 @@ kaapelin läpivientiin päin).
 tarkistaisi kortin/PIN-koodin omasta 2000 käyttäjän muististaan ja laukaisisi
 relettä itse — se ei tiedä mitään TOTP:sta. Ratkaisu: näppäimistöä käytetään
 **Wiegand-ulostulolla varustettuna lukijana** (ei standalone-tilassa), ja
-Wiegand-data luetaan alla olevalla ESP32-C3-DevKit-RUST-2:lla, joka laskee
+Wiegand-data luetaan alla olevalla ESP32-C6-DevKitC-1:llä, joka laskee
 TOTP:n `lock-client`illa ja ohjaa Asia-Teco-salpaa itse GPIO:lta. Tämä on nyt
 toteutettu `lock-client/`-hakemistossa (Wiegand-luku, TOTP-vertailu,
-releohjaus) — ks. [lock-client/README.md](../lock-client/README.md) tunnetuista
-rajoituksista (mm. Wiegand-koodauksen oletukset eivät ole vielä varmennettuja
-oikeaa laitetta vasten, eikä tasomuunninta ole vielä valittu, ks. alla).
+releohjaus), ja Wiegand/TOTP/rele-ketju on varmennettu päästä päähän
+esp32sim-emulaattorissa — ks. [lock-client/README.md](../lock-client/README.md)
+tunnetuista rajoituksista (mm. Wiegand-koodauksen oletukset eivät ole vielä
+varmennettuja oikeaa laitetta vasten, eikä itse C6-laudalle ole vielä
+flashattu, ks. alla).
 
 ### Ohjainelektroniikka
 
 | Tuote | Malli | Tekniset tiedot |
 |---|---|---|
-| Kehityslauta / mikro-ohjain (`lock-client`) | ESP32-C3-DevKit-RUST-2 | ESP32-C3-MINI-1-moduuli (RISC-V, yksiydin), 2,4 GHz Wi-Fi + Bluetooth 5 (LE), Li-Ion-akun latauspiiri, sisäänrakennettuja antureita, useimmat I/O-pinnit header-riveillä molemmin puolin, sopii breadboardille/jumpperijohdoilla prototypointiin |
+| Kehityslauta / mikro-ohjain (`lock-client`) | ESP32-C6-DevKitC-1 | ESP32-C6-WROOM-1(U)-moduuli (RISC-V RV32IMAC, yksiydin), Wi-Fi 6 (2,4 GHz) + Bluetooth 5 (LE) + IEEE 802.15.4 (Zigbee/Thread), 8 MB SPI-flash, sisäänrakennettu osoitettava RGB-LED (GPIO8) ja BOOT-nappi, useimmat I/O-pinnit header-riveillä molemmin puolin, sopii breadboardille/jumpperijohdoilla prototypointiin. Ei Li-Ion-latauspiiriä (aiemmin harkitulla ESP32-C3-DevKit-RUST-2:lla oli). |
 
 Integroitu Wi-Fi ja BLE kattavat kaksi README:n kolmesta mainitusta
 koodinvälitystavasta (näppäimistön lisäksi) samalla laudalla, jos niitä
 halutaan käyttää myöhemmin.
 
 Wiegand-linjojen (D0/D1, tyypillisesti 5V logiikka) ja releen (12V puolella)
-liittäminen ESP32-C3:n 3,3V GPIO:hin vaatii todennäköisesti tasomuuntimen/
+liittäminen ESP32-C6:n 3,3V GPIO:hin vaatii todennäköisesti tasomuuntimen/
 optoerottimen — ei vielä valittu, lisätään ostoslistaan kun piirikaavio on
-suunniteltu.
+suunniteltu. D0/D1/rele on kytketty GPIO2/GPIO3/GPIO10:een — näitä valittaessa
+piti erityisesti välttää C6:n strapping-/JTAG-/USB-/UART-pinnejä (GPIO4-9,
+12-13, 15-17), jotka estäisivät käynnistymisen tai veisivät sarjakonsolin;
+ks. `lock-client/firmware/src/main.rs`:n kommentti täydestä listasta.
 
 **Kokonaisarvio muu materiaali (ilman lukkoa ja elektroniikkaa):** ~60–90 €
 Lukko, näppäimistö ja kehityslauta on jo hankittu erikseen, hinta ei sisälly
@@ -244,10 +249,12 @@ reunat imevät kosteutta ellei niitä käsitellä.
   kestää ulkoasennuksen sellaisenaan. Koodintarkistus tehdään kuitenkin repon
   TOTP-logiikalla laitteen oman staattisen kortti/PIN-muistin sijaan:
   näppäimistöä käytetään Wiegand-lukijana, ja TOTP-vertailu + releohjaus on
-  toteutettu ESP32-C3-DevKit-RUST-2:lla `lock-client`-puolella. Wiegand/rele
-  -tasomuunnosta (5V/3,3V/12V) ei ole vielä suunniteltu, eikä Wiegand-koodauksen
-  oletuksia ole varmennettu oikeaa keypadia vasten — ks.
-  `lock-client/README.md` tunnetuista rajoituksista.
+  toteutettu ESP32-C6-DevKitC-1:lle `lock-client`-puolella, ja koko
+  Wiegand/TOTP/rele-ketju on varmennettu esp32sim-emulaattorissa (ei vielä
+  oikealla C6-laudalla, jota ei ole hankittu). Wiegand/rele-tasomuunnosta
+  (5V/3,3V/12V) ei ole vielä suunniteltu, eikä Wiegand-koodauksen oletuksia
+  ole varmennettu oikeaa keypadia vasten — ks. `lock-client/README.md`
+  tunnetuista rajoituksista.
 - Valepohjan tulee olla irrotettavissa ilman työkaluja tai vain kevyellä
   voimalla, huoltoa varten (patterin vaihto, elektroniikan tarkastus).
 - Jos säänkestävyys osoittautuu riittämättömäksi pelkällä tiivistenauhalla,
