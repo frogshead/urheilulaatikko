@@ -84,3 +84,66 @@ jobs:
       with:
          name: esp32c3 firmware
          path: ./lock-client/target/riscv32imc-unknown-none-elf/release/lock-client-firmware
+
+  simulate_client_firmware:
+    name: Runs the Wiegand/TOTP/relay integration test in esp32sim
+
+    runs-on: ubuntu-latest
+    env:
+      # Pins github.com/mikroverk/esp32sim (MIT, not vendored in this repo) to
+      # a commit verified to work with lock-client/firmware/sim, rather than
+      # always building its default branch — an upstream breaking change then
+      # fails this job's checkout step with a clear "ref not found" instead of
+      # silently changing what gets tested. Bump deliberately, re-verifying
+      # locally first: see lock-client/firmware/sim/README.md.
+      ESP32SIM_REF: 04f07602dba76eb6704b8901c989c9c9c1f8b42a
+      # Pinned for the same reason, and so the cache key below is meaningful.
+      ESPFLASH_VERSION: 4.6.0
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+      with:
+        repository: mikroverk/esp32sim
+        ref: ${{ env.ESP32SIM_REF }}
+        path: esp32sim
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Install the RISC-V target
+      run: rustup target add riscv32imc-unknown-none-elf
+
+    - name: Cache esp32sim's build, the mask ROM, and espflash
+      uses: actions/cache@v4
+      with:
+        path: |
+          esp32sim/target
+          esp32sim-roms
+          ~/.cargo/bin/espflash
+          ~/.cargo/registry
+        key: esp32sim-${{ runner.os }}-${{ env.ESP32SIM_REF }}-${{ env.ESPFLASH_VERSION }}-${{ hashFiles('esp32sim/Cargo.lock') }}
+
+    - name: Build esp32sim-c3
+      working-directory: esp32sim
+      run: cargo build --release --bin esp32sim-c3
+    # Mask ROM ELFs (Apache-2.0, espressif/esp-rom-elfs), fetched by release
+    # and SHA-256-verified by esp32sim's own script — see its comments for
+    # what a real upgrade involves.
+    - name: Fetch and verify the ESP32-C3 mask ROM
+      working-directory: esp32sim
+      run: sh tools/fetch-rom-elfs.sh "$GITHUB_WORKSPACE/esp32sim-roms"
+    - name: Install espflash
+      run: cargo install espflash@${{ env.ESPFLASH_VERSION }} --locked
+
+    # Boots the real firmware binary under esp32sim's instruction-level
+    # emulation of the real mask ROM and ESP-IDF bootloader, scripts a
+    # Wiegand keypad entry on GPIO2/3, and checks the relay pin (GPIO4) over
+    # a VCD waveform — see sim/README.md for what this does and does not
+    # prove relative to real hardware.
+    - name: Run the sim integration test
+      working-directory: ./lock-client/firmware
+      env:
+        ESP32SIM_BIN: ${{ github.workspace }}/esp32sim/target/release/esp32sim-c3
+        ESP32SIM_ROM_DIR: ${{ github.workspace }}/esp32sim-roms
+      run: python3 sim/run_sim_tests.py

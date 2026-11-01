@@ -96,6 +96,19 @@ clock, Unix seconds) and an `Actuator` (unlock/lock) as trait objects, which
 is what makes it testable with fakes in `core`'s test suite instead of only
 observable by flashing a real board.
 
+### Simulated integration tests
+
+[`sim/`](firmware/sim) runs the actual firmware binary — real GPIO interrupt
+handler, real emulated chip — under
+[esp32sim](https://github.com/mikroverk/esp32sim) and drives it with a
+scripted Wiegand keypad entry: a correct TOTP code must unlock the relay for
+exactly `UNLOCK_DURATION` and relock, a wrong one must never touch it. This is
+the one path `core`'s unit tests can't reach (they use fake trait objects, not
+a real interrupt handler). CI runs this on every push (`simulate_client_firmware`
+in `.github/workflows/rust.yml`); see [`sim/README.md`](firmware/sim/README.md)
+for local setup — it needs a one-time build of the emulator, not vendored
+into this repo.
+
 ### TOTP parameters
 
 Same as `totp-server` (see `totp-server/src/totp/mod.rs`): SHA-1, 6 digits,
@@ -136,9 +149,13 @@ they are never treated as a digit or as a wildcard match.
   parts list (`plywood-box/laatikko-ohje-ja-ostoslista.md`) for the open note.
 - **Pin numbers in `firmware/src/main.rs` are placeholders** (GPIO2/3 for
   D0/D1, GPIO4 for the relay). Update them to match the actual wiring.
-- **Only boot has been verified on real hardware so far** — flashed and
+- **Real hardware has only verified boot.** Flashed to a real board and
   confirmed it reaches `lock-client ready` and stays stable with nothing
-  connected to GPIO2/3/4. The Wiegand capture, decode, and relay-drive path
-  has only been exercised by `core`'s unit tests with fake pulses, not against
-  a real keypad — that's still open, on top of the wire-format and
-  level-shifting unknowns above.
+  connected to GPIO2/3/4 — see the flashing notes above.
+- **The Wiegand/TOTP/relay path has been verified in [esp32sim](firmware/sim),
+  not against a real keypad.** The emulator confirmed a correct code unlocks
+  the relay for exactly `UNLOCK_DURATION` and a wrong one never touches it —
+  real GPIO interrupts on an emulated chip, not fakes — but that's not the
+  same as a real Wiegand signal on real wires. The wire-format and
+  level-shifting unknowns above are both still open precisely because of that
+  gap.

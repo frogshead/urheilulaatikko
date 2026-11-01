@@ -54,8 +54,19 @@ things only surfaced at the flashing step, not from `cargo build` — see
 `esp_bootloader_esp_idf::esp_app_desc!()` in `main.rs` or `espflash` refuses
 to flash it, and an outdated `espflash` can fail the flash step with an
 opaque error even after connecting to the board fine. Only boot has been
-verified this way — the Wiegand/TOTP/relay path is still only exercised by
-`core`'s unit tests, not against a real keypad.
+verified this way.
+
+**The Wiegand/TOTP/relay path is verified in `lock-client/firmware/sim`**
+against [esp32sim](https://github.com/mikroverk/esp32sim), an
+instruction-level ESP32 emulator (a separate project, not vendored here; run
+in CI by the `simulate_client_firmware` job at a pinned commit — see
+`lock-client/firmware/sim/README.md`). It boots the real firmware binary
+under the real mask ROM and bootloader, scripts a Wiegand keypad entry on
+GPIO2/3, and checks the relay pin (GPIO4) over a VCD waveform: a correct TOTP
+code must unlock it for exactly `UNLOCK_DURATION` and relock, a wrong one
+must never touch it. This is real GPIO interrupts on an emulated chip, not
+the fake `Clock`/`Actuator` trait objects `core`'s unit
+tests use — but it is still not a real Wiegand signal on real wires.
 
 ## Build and Test Commands
 
@@ -72,6 +83,11 @@ cargo test --manifest-path ./totp-server/Cargo.toml
 # ESP32-C3 firmware — must run from within the directory, see the toolchain
 # note above
 ( cd lock-client/firmware && rustup target add riscv32imc-unknown-none-elf && cargo build --release )
+
+# Wiegand/TOTP/relay integration test against the esp32sim emulator. CI runs
+# this too (simulate_client_firmware); locally it needs a one-time build of
+# esp32sim first — see sim/README.md.
+( cd lock-client/firmware && ESP32SIM_BIN=... ESP32SIM_ROM_DIR=... python3 sim/run_sim_tests.py )
 
 # Server integration tests against real Postgres and Keycloak containers.
 # These are #[ignore]d by default and need a working Docker daemon.
@@ -110,8 +126,6 @@ buffers digits (`core::pin_entry`) and checks a completed code against
 `core::totp` — none of this middle layer touches hardware, which is what
 makes it unit-testable. `firmware::actuator::BoltActuator` is the only thing
 that actually drives a GPIO pin.
-
-### Server
 
 ### Server
 
@@ -157,3 +171,9 @@ Invariants worth preserving when changing this code:
 4. **build_client_firmware**: builds/lints the ESP32-C3 firmware (from within
    `lock-client/firmware/`, per the toolchain note above) and uploads the
    resulting ELF as an artifact.
+5. **simulate_client_firmware**: checks out `mikroverk/esp32sim` at a pinned
+   commit (`ESP32SIM_REF`), builds `esp32sim-c3`, fetches and SHA-256-verifies
+   the mask ROM, installs a pinned `espflash`, and runs
+   `lock-client/firmware/sim/run_sim_tests.py` — see that directory's
+   README.md for what it tests and how to bump the pinned versions.
+Run it by hand after touching the Wiegand/lock/actuator code.

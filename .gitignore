@@ -21,3 +21,7 @@ target/
 #.idea/
 # Local environment files (never commit real credentials or encryption keys)
 .env
+
+# Python bytecode cache (lock-client/firmware/sim's scripts)
+__pycache__/
+*.pyc
