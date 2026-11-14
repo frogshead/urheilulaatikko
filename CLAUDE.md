@@ -48,32 +48,41 @@ needs) relative to the *working directory*, not `--manifest-path`, so
 invoking it from elsewhere silently skips that config and fails to build or
 link.
 
-**Not yet flashed to a real ESP32-C6** — the switch away from the
-ESP32-C3-DevKit-RUST-2 happened without a C6 board on hand. The C3 board did
-confirm boot (`/dev/ttyACM0` on Linux), both with the original
-rustc-1.89-pinned dependency set and again after bumping everything to latest
-once the toolchain moved to 1.98, and surfaced two things worth knowing if
-`espflash` ever mysteriously refuses to flash this firmware again — see
+**Flashed and boot-verified on a real ESP32-C6-DevKitC-1** (rev v0.2, 8 MB
+flash): `espflash flash` over the board's UART port (its CP2102N bridge, a
+*different* USB port from the native USB-JTAG) boots it to `lock-client
+ready` and it stays stable. Surfaced two things worth knowing if `espflash`
+ever mysteriously refuses to flash this firmware again — see
 `lock-client/README.md`: it needs `esp_bootloader_esp_idf::esp_app_desc!()`
 in `main.rs` or `espflash` refuses to flash it, and an outdated `espflash`
 can fail the flash step with an opaque error even after connecting to the
 board fine. These are properties of the `esp-hal`/`espflash` toolchain, not
 of either chip specifically, so they still apply.
 
-**`cargo run --release` in `lock-client/firmware` now flashes via `probe-rs`**
-(`runner` in `.cargo/config.toml`), over the C6-DevKitC-1's built-in USB-JTAG
-— no separate debug probe. `probe-rs-espressif` (installed automatically
-with `probe-rs-tools`) uses `espflash`'s own IDF image-building code
-internally, so it still generates the bootloader/partition table itself;
-`espflash flash`/`espflash monitor` remain documented as a fallback that
-needs no JTAG setup. **This is unverified** — no board was connected when it
-was configured, so neither the udev rules nor an actual `probe-rs run`/
-`probe-rs gdb`/`probe-rs debug` session have been exercised against real
-silicon. One thing worth knowing either way: ESP32 RISC-V chips have no RTT
-hardware, so `esp_println`'s console output is not visible through
-`probe-rs attach` (which is RTT-only) — it still needs a separate serial
-connection (`espflash monitor` or any terminal), regardless of which tool
-flashed the chip. See `lock-client/README.md`, "Flashing and debugging".
+**`cargo run --release` in `lock-client/firmware` flashes via `probe-rs`**
+(`runner` in `.cargo/config.toml`), over the C6-DevKitC-1's *other* USB
+port — its built-in USB-JTAG (`303a:1001`), no separate debug probe needed.
+**This is now verified on real hardware too**, once the udev rules were
+installed (requires a one-time interactive `sudo`, which this environment
+cannot run itself — see `lock-client/README.md` for the exact commands):
+`probe-rs list` sees the probe, `cargo run --release` flashes and starts the
+firmware in ~1.3s, and reading the GPIO output register directly over JTAG
+(`probe-rs read --chip esp32c6 b32 0x60091004 1` → `0x00000000`) confirmed
+**the relay (GPIO10, bit 10) is low — bolt locked — at boot**, not just "the
+code says it should be." `probe-rs-espressif` uses `espflash`'s own IDF
+image-building code internally, so it still generates the bootloader/
+partition table itself; `espflash flash`/`espflash monitor` remain
+documented as a fallback that needs no JTAG setup. One thing worth knowing
+either way: ESP32 RISC-V chips have no RTT hardware, so `esp_println`'s
+console output is not visible through `probe-rs attach` (which is RTT-only)
+— it still needs a separate serial connection (`espflash monitor` or any
+terminal), regardless of which tool flashed the chip. See
+`lock-client/README.md`, "Flashing and debugging".
+
+**Still not verified: the Wiegand/TOTP/relay path on this board.** Nothing
+above touched GPIO2/3 — that needs real Wiegand pulses (a keypad or signal
+generator), which a register read can't substitute for. That path is only
+verified in the emulator (next paragraph).
 
 **The Wiegand/TOTP/relay path is verified in `lock-client/firmware/sim`**
 against [esp32sim](https://github.com/mikroverk/esp32sim), an

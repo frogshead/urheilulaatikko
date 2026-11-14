@@ -100,13 +100,21 @@ espflash monitor --port /dev/ttyACM0
 the emulator boots from — that usage is unrelated to real hardware and
 unaffected by whichever tool you flash a real board with.
 
-**Not yet flashed to a real ESP32-C6-DevKitC-1 or debugged over probe-rs** —
-the switch from the earlier ESP32-C3-DevKit-RUST-2 target happened without
-one on hand, and no board was connected when probe-rs was set up either; see
-[`sim/`](firmware/sim) for what *has* been verified, on an emulated C6, and
-the "Known limitations" section below. The C3 board this ran on previously
-did confirm two things worth knowing if `espflash` ever mysteriously refuses
-to flash this firmware again, since they're properties of the `esp-hal`/
+**Confirmed on a real ESP32-C6-DevKitC-1** (rev v0.2, 8 MB flash): `espflash
+flash` over the board's UART port boots it to `lock-client ready` and it
+stays stable with nothing on GPIO2/3/10. Separately, over the board's other
+USB port (its native USB-JTAG), `probe-rs list` sees the probe once the udev
+rules below are installed, `cargo run --release` flashes and starts the
+firmware in just over a second, and reading the GPIO output register
+directly over JTAG (`probe-rs read --chip esp32c6 b32 0x60091004 1`) shows
+`0x00000000` — bit 10 low, confirming **the relay is actually off (bolt
+locked) at boot**, not just "the code says it should be." See the "Known
+limitations" section below for what that does and doesn't cover (notably:
+no Wiegand signal has touched the board — that needs a real keypad or
+signal generator on GPIO2/3, which no register read can substitute for).
+
+The two things below are worth knowing if `espflash` ever mysteriously
+refuses to flash this firmware, since they're properties of the `esp-hal`/
 `espflash` toolchain rather than of either chip specifically:
 
 - **`esp_bootloader_esp_idf::esp_app_desc!()` is required.** Without it,
@@ -207,21 +215,14 @@ they are never treated as a digit or as a wildcard match.
   ESP32-C6-DevKitC-1; see the comment on the relay pin in `main.rs` for which
   pins are strapping/JTAG/USB/UART and must be avoided if this ever changes).
   Update them to match the actual wiring.
-- **Not yet verified on real hardware.** The switch to the ESP32-C6 happened
-  without a board on hand — see the flashing section above. What *has* been
-  verified is boot on the earlier ESP32-C3 board (same `esp-hal`/`espflash`
-  toolchain, different chip) and the full Wiegand/TOTP/relay path in
-  [esp32sim](firmware/sim), not against a real keypad. The emulator confirmed
-  a correct code unlocks the relay for exactly `UNLOCK_DURATION` and a wrong
-  one never touches it — real GPIO interrupts on an emulated chip, not fakes
-  — but that's not the same as either a real ESP32-C6 or a real Wiegand
-  signal on real wires. The wire-format and level-shifting unknowns above are
-  both still open precisely because of that gap.
-- **`probe-rs` is configured but unverified against real hardware**, for the
-  same reason: no board was connected when it was set up. `probe-rs list`
-  has not been run against a real ESP32-C6, the udev rules have not been
-  installed on this machine (install step above, skipped for now), and
-  `cargo run --release` has never actually flashed anything over JTAG. If it
-  doesn't connect, falling back to the plain `espflash flash`/`espflash
-  monitor` commands above rules out whether the problem is probe-rs/JTAG
-  setup specifically.
+- **Boot and the relay's resting state are verified on a real ESP32-C6;
+  the Wiegand/TOTP/relay path itself is not.** The flashing section above
+  has the details: a real board boots over plain serial, `probe-rs` flashes
+  and connects over its native USB-JTAG, and a direct JTAG register read
+  confirmed the relay is low (locked) at boot. What's still only verified in
+  [esp32sim](firmware/sim), not on this board, is the thing that actually
+  matters operationally: that a correct TOTP code unlocks the relay for
+  exactly `UNLOCK_DURATION` and a wrong one never touches it. That needs
+  real Wiegand pulses on GPIO2/3 — a keypad or a signal generator — which
+  nothing done so far substitutes for. The wire-format and level-shifting
+  unknowns above are both still open precisely because of that gap.
