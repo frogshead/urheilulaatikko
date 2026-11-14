@@ -9,6 +9,10 @@ path = "src/main.rs"
 test = false
 doctest = false
 
+[[test]]
+name = "smoke"
+harness = false
+
 [dependencies]
 lock-client-core = { path = "../core" }
 esp-hal = { version = "1.2.2", features = ["esp32c6", "unstable"] }
@@ -17,6 +21,17 @@ esp-println = { version = "0.18.0", features = ["esp32c6"] }
 critical-section = "1.2"
 heapless = { version = "0.9", default-features = false }
 esp-bootloader-esp-idf = { version = "0.6.0", features = ["esp32c6"] }
+# Only its build script matters here: it adds embedded-test.x to the linker
+# search path. A regular (non-dev) dependency so that build script also runs
+# for the release bin, but harmlessly — nothing references the crate there,
+# and build.rs only passes `-Tembedded-test.x` (see below) for the `smoke`
+# test binary, never for the bin, so the bin's link is unaffected either way.
+embedded-test-linker-script = "0.1.0"
+
+[dev-dependencies]
+# Defaults (semihosting + panic-handler) are all `tests/smoke.rs` needs: it
+# has no async tests, so no embassy/executor feature is required.
+embedded-test = "0.7.3"
 
 [profile.release]
 opt-level = "s"

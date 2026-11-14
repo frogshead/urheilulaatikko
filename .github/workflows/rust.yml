@@ -76,9 +76,23 @@ jobs:
     - name: Clippy
       working-directory: ./lock-client/firmware
       run: cargo clippy --release -- -D warnings
+    # `cargo clippy --all-targets` doesn't work on this crate: it tries to
+    # build the [[bin]] in test mode despite its `test = false`, which fails
+    # with "can't find crate for `test`" on this no_std target. Scoped to
+    # just the smoke test instead.
+    - name: Clippy (hardware smoke tests)
+      working-directory: ./lock-client/firmware
+      run: cargo clippy --release --test smoke -- -D warnings
     - name: Build
       working-directory: ./lock-client/firmware
       run: cargo build --release --verbose
+    # Compiles tests/smoke.rs (embedded-test, see its header comment) but
+    # does not run it: that needs a real ESP32-C6 over probe-rs, which this
+    # runner doesn't have. Compiling it here at least catches the test file
+    # silently drifting out of sync with core's or main.rs's API.
+    - name: Build hardware smoke tests (not run — no board in CI)
+      working-directory: ./lock-client/firmware
+      run: cargo test --release --no-run --verbose
     - name: upload artifact
       uses: actions/upload-artifact@v4
       with:

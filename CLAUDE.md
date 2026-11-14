@@ -79,10 +79,27 @@ console output is not visible through `probe-rs attach` (which is RTT-only)
 terminal), regardless of which tool flashed the chip. See
 `lock-client/README.md`, "Flashing and debugging".
 
+**`lock-client/firmware/tests/smoke.rs` runs automated hardware tests over
+`probe-rs`** ([embedded-test](https://docs.rs/embedded-test); `cargo test
+--release` from `firmware/`). It's the follow-up to the one-off JTAG register
+read above: the relay-starts-low check is now an automated test instead of a
+manual `probe-rs read`, plus `core`'s Wiegand decoding and the RFC 6238 TOTP
+vector actually executed on real `riscv32imac` silicon (not just the host or
+the emulator's modeled CPU), plus the full `LockController` driving a real
+GPIO pin for both a correct and a wrong code. Confirmed these catch a real
+regression, not just always-green, by temporarily flipping the relay's
+initial level and watching 2 of 6 tests fail before reverting. CI
+(`build_client_firmware`) only compiles and lints this file
+(`cargo test --release --no-run`, `cargo clippy --release --test smoke`) —
+no board in CI — so it catches API drift, not hardware regressions.
+`cargo clippy --all-targets` does **not** work on this crate: it tries to
+build the `[[bin]]` in test mode despite `test = false`, which fails with
+"can't find crate for `test`" on this no_std target; use `--test smoke`.
+
 **Still not verified: the Wiegand/TOTP/relay path on this board.** Nothing
 above touched GPIO2/3 — that needs real Wiegand pulses (a keypad or signal
-generator), which a register read can't substitute for. That path is only
-verified in the emulator (next paragraph).
+generator), which neither a register read nor the smoke tests substitute
+for. That path is only verified in the emulator (next paragraph).
 
 **The Wiegand/TOTP/relay path is verified in `lock-client/firmware/sim`**
 against [esp32sim](https://github.com/mikroverk/esp32sim), an
@@ -117,6 +134,10 @@ cargo test --manifest-path ./totp-server/Cargo.toml
 # note above
 ( cd lock-client/firmware && rustup target add riscv32imac-unknown-none-elf && cargo build --release )
 
+# Hardware smoke tests (embedded-test + probe-rs). Needs a real ESP32-C6
+# connected over its native USB-JTAG; compiles but doesn't run without one.
+( cd lock-client/firmware && cargo test --release )
+
 # Wiegand/TOTP/relay integration test against the esp32sim emulator. CI runs
 # this too (simulate_client_firmware); locally it needs a one-time build of
 # esp32sim first — see sim/README.md.
@@ -132,6 +153,7 @@ cargo clippy --manifest-path ./totp-server/Cargo.toml --all-targets -- -D warnin
 cargo fmt --manifest-path ./lock-client/core/Cargo.toml --check
 cargo clippy --manifest-path ./lock-client/core/Cargo.toml --all-targets -- -D warnings
 ( cd lock-client/firmware && cargo fmt --check && cargo clippy --release -- -D warnings )
+( cd lock-client/firmware && cargo clippy --release --test smoke -- -D warnings )   # scoped; --all-targets fails, see above
 ```
 
 ### Development environment
@@ -202,8 +224,10 @@ Invariants worth preserving when changing this code:
 3. **build_client_core**: builds/tests/lints `lock-client`'s `core` crate on
    the host.
 4. **build_client_firmware**: builds/lints the ESP32-C6 firmware (from within
-   `lock-client/firmware/`, per the toolchain note above) and uploads the
-   resulting ELF as an artifact.
+   `lock-client/firmware/`, per the toolchain note above), uploads the
+   resulting ELF as an artifact, and separately compiles + lints
+   `tests/smoke.rs` (`--no-run`, `--test smoke`) without running it — no
+   board in CI.
 5. **simulate_client_firmware**: checks out `mikroverk/esp32sim` at a pinned
    commit (`ESP32SIM_REF`), builds `esp32sim-c6`, fetches and SHA-256-verifies
    the mask ROM, installs a pinned `espflash`, and runs

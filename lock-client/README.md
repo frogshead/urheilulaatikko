@@ -159,6 +159,47 @@ clock, Unix seconds) and an `Actuator` (unlock/lock) as trait objects, which
 is what makes it testable with fakes in `core`'s test suite instead of only
 observable by flashing a real board.
 
+### Hardware smoke tests
+
+`firmware/tests/smoke.rs` is a self-contained `#![no_std]` test binary using
+[embedded-test](https://docs.rs/embedded-test): `probe-rs` flashes it over
+JTAG, resets the board, runs each `#[test]` fn in turn, and reports pass/fail
+back to `cargo test` — the same experience as host unit tests, just executed
+on real silicon. Needs a board connected over its native USB-JTAG (same setup
+as above):
+
+```bash
+cd firmware
+cargo test --release
+```
+
+What it checks, each time: the relay comes up low (bolt locked) the instant
+it's configured (the same fact a one-off `probe-rs read` confirmed by hand —
+see above — now checked on every run); `core`'s Wiegand decoding and the
+RFC 6238 TOTP vector, cross-compiled for `riscv32imac` and actually executed
+here, not just on the host; and the full `LockController` decision driving a
+*real* GPIO pin (not `core`'s fake `Actuator`, not the simulator's emulated
+one) for both a correct and a wrong code.
+
+Verified these tests actually catch a real regression and aren't just always
+green: temporarily changed the relay's initial level to `High` in
+`tests/smoke.rs`, reran `cargo test --release`, and got 2 failures
+(`relay_starts_locked`, and the wrong-code test, which also checks the relay
+ends up low) before reverting.
+
+This is still not a test of the Wiegand/relay *wiring* — see "Known
+limitations" below for what nothing here (or anywhere else) has touched yet.
+
+**Running in CI:** the GitHub Actions runner has no board, so
+`build_client_firmware` only compiles `tests/smoke.rs`
+(`cargo test --release --no-run`) and lints it
+(`cargo clippy --release --test smoke`) — enough to catch the test file
+drifting out of sync with `core`'s or `main.rs`'s API, not enough to catch a
+real hardware regression. `cargo clippy --release --all-targets` does *not*
+work on this crate: it tries to build the `[[bin]]` in test mode despite its
+`test = false`, which fails with "can't find crate for `test`" on this
+no_std target — use the scoped `--test smoke` form instead, as CI does.
+
 ### Simulated integration tests
 
 [`sim/`](firmware/sim) runs the actual firmware binary — real GPIO interrupt
@@ -215,14 +256,16 @@ they are never treated as a digit or as a wildcard match.
   ESP32-C6-DevKitC-1; see the comment on the relay pin in `main.rs` for which
   pins are strapping/JTAG/USB/UART and must be avoided if this ever changes).
   Update them to match the actual wiring.
-- **Boot and the relay's resting state are verified on a real ESP32-C6;
-  the Wiegand/TOTP/relay path itself is not.** The flashing section above
-  has the details: a real board boots over plain serial, `probe-rs` flashes
-  and connects over its native USB-JTAG, and a direct JTAG register read
-  confirmed the relay is low (locked) at boot. What's still only verified in
-  [esp32sim](firmware/sim), not on this board, is the thing that actually
-  matters operationally: that a correct TOTP code unlocks the relay for
-  exactly `UNLOCK_DURATION` and a wrong one never touches it. That needs
-  real Wiegand pulses on GPIO2/3 — a keypad or a signal generator — which
+- **Boot, the relay's resting state, and `core`'s logic running correctly on
+  real silicon are all verified on a real ESP32-C6 — the Wiegand/relay
+  *wiring* is not.** The flashing section above and "Hardware smoke tests"
+  cover what's been checked: plain-serial boot, `probe-rs` over native
+  USB-JTAG, the relay low at boot (both a one-off JTAG register read and an
+  automated test now), and `core`'s Wiegand/TOTP logic actually executing
+  correctly when cross-compiled for `riscv32imac`, not just on the host or
+  in the emulator's modeled CPU. None of that touches GPIO2/3, though — a
+  real Wiegand signal needs a real keypad or a signal generator, which
   nothing done so far substitutes for. The wire-format and level-shifting
-  unknowns above are both still open precisely because of that gap.
+  unknowns above are both still open precisely because of that gap, and it's
+  the one thing that still only exists end-to-end in
+  [esp32sim](firmware/sim).
