@@ -248,9 +248,27 @@ they are never treated as a digit or as a wildcard match.
   very first version of this crate had. It needs to move to non-volatile
   storage (e.g. ESP32 NVS), provisioned separately from the firmware image —
   not implemented yet.
-- **No level shifting designed yet.** The keypad's Wiegand lines are commonly
-  5V logic and the relay side is 12V, against this chip's 3.3V GPIO — see the
-  parts list (`plywood-box/laatikko-ohje-ja-ostoslista.md`) for the open note.
+- **Level shifting for the keypad's D0/D1 lines is required, confirmed by
+  measurement, and not yet built.** Wiegand D0/D1 are open-collector: the
+  keypad only ever pulls a line low to signal a bit, and the idle-"high"
+  level comes from a pull-up. **Measured directly on the real keypad (powered
+  from its own 12V supply, ESP32 disconnected): D0/D1 idle at +5V**, so this
+  keypad does supply its own internal pull-up — it was not a safe assumption
+  to skip this measurement. ESP32-C6 GPIOs are rated to 3.6V absolute max
+  (Espressif's own datasheet, Table 5-1) — exceeding that risks permanently
+  damaging the pin — so **D0/D1 must never be wired to GPIO2/GPIO3 directly**;
+  doing so would almost certainly destroy those pins.
+
+  **Fix, not yet built:** a 2-channel bidirectional logic-level shifter
+  module (5V↔3.3V, the common BSS138-based hobbyist board — no resistor
+  sizing needed) between D0/D1 and GPIO2/GPIO3, HV side to the keypad, LV
+  side to the ESP32, one shared ground across the whole circuit. An
+  opto-isolator per line (e.g. PC817) is a more robust alternative —
+  galvanically separates the keypad's externally-wired 12V circuit from the
+  board's 3.3V logic — and is now buildable with real numbers (5V idle, open-
+  collector sink) instead of a guess, if the extra isolation is wanted. The
+  relay side (GPIO10 driving the 12V bolt) is a separate, already-noted open
+  item — see the parts list (`plywood-box/laatikko-ohje-ja-ostoslista.md`).
 - **Pin numbers in `firmware/src/main.rs` are placeholders** (GPIO2/3 for
   D0/D1, GPIO10 for the relay — chosen as plain, unrestricted pins on the
   ESP32-C6-DevKitC-1; see the comment on the relay pin in `main.rs` for which

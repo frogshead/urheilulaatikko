@@ -48,10 +48,23 @@ Ulkomitat 100 × 50 × 50 cm (leveys × syvyys × korkeus). Vastaa OpenSCAD-mall
 
 Tilattu ja saapunut (AliExpress), hinnat tilausvahvistuksesta:
 
-| Tuote | Malli | Tekniset tiedot |
-|---|---|---|
-| RFID + koodinäppäimistö (standalone access-kontrolleri) | LUCKING DOOR S601/S602 | **IP68**, sinkkiseos-kotelo (vandaalinkestävä), 125kHz EM- ja 13,56MHz Mifare-kortit, kortti/PIN/kortti+PIN, Wiegand 26 sisään- ja ulostulo, DC 12V, virrankulutus ~30mA, käyttäjäkapasiteetti 2000, lukon rele max 3A (oikosulkusuojattu), hälytysrele max 20A, ovirele säädettävä 0–99s, hälytysaika säädettävä 0–3min, taustavalaistu näppäimistö, summeri, käyttölämpötila −45…60 °C, koko 120×76×20mm |
-| Electric drop bolt -lukko (upotettava, moottoroitu salpa) | Asia-Teco B6L-NC / B7L-NC, **fail-secure (NC)** | DC 12V, käynnistysvirta 1,1A / pitovirta 0,14A, viive säädettävä 0/3/6s, palautesignaali (feedback), alumiiniseos, 200×28×38mm |
+| Tuote | Malli | Tekniset tiedot | Linkki |
+|---|---|---|---|
+| RFID + koodinäppäimistö (standalone access-kontrolleri) | LUCKING DOOR S601/S602 | **IP68**, sinkkiseos-kotelo (vandaalinkestävä), 125kHz EM- ja 13,56MHz Mifare-kortit, kortti/PIN/kortti+PIN, Wiegand 26 sisään- ja ulostulo, DC 12V, virrankulutus ~30mA, käyttäjäkapasiteetti 2000, lukon rele max 3A (oikosulkusuojattu), hälytysrele max 20A, ovirele säädettävä 0–99s, hälytysaika säädettävä 0–3min, taustavalaistu näppäimistö, summeri, käyttölämpötila −45…60 °C, koko 120×76×20mm | [AliExpress](https://www.aliexpress.com/item/1005006213032973.html) |
+| Electric drop bolt -lukko (upotettava, moottoroitu salpa) | Asia-Teco B6L-NC / B7L-NC, **fail-secure (NC)** | DC 12V, käynnistysvirta 1,1A / pitovirta 0,14A, viive säädettävä 0/3/6s, palautesignaali (feedback), alumiiniseos, 200×28×38mm | — |
+
+**Huom (yhä avoin):** tuotesivun myyntiotsikko mainitsee **IP67**
+(speksitaulukon mukaan yllä on IP68) — tuotesivu on JavaScript-renderöity
+eikä speksitaulukkoa saatu luettua automaattisesti, niin tarkista oikea
+luokitus suoraan sivun Specification-välilehdeltä.
+
+**Wiegand D0/D1:n jännite on mitattu ja vahvistettu: +5V levossa**
+(näppäimistö omasta 12V-syötöstään, ESP32 irti), eli näppäimistön oma
+sisäinen ylösvetovastus vetää linjan 5V:iin — ei turvallista kytkeä suoraan
+ESP32-C6:n GPIO:hin (siedettävä max 3,6V, ks. `lock-client/README.md`).
+Tasomuunnin D0/D1:n ja GPIO2/GPIO3:n väliin on siis **pakollinen**, ei enää
+vain varotoimi — ks. `lock-client/README.md`:n "Known limitations" tarkasta
+kytkentäsuosituksesta (valmis 2-kanavainen 5V↔3,3V-tasomuunninmoduuli).
 
 Lukon **NC-versio on fail-secure**: salpa pysyy lukossa ilman virtaa ja avautuu
 vain kun ohjaimelta tulee virta — säilytyslaatikkoon oikea valinta, koska
@@ -85,10 +98,12 @@ Integroitu Wi-Fi ja BLE kattavat kaksi README:n kolmesta mainitusta
 koodinvälitystavasta (näppäimistön lisäksi) samalla laudalla, jos niitä
 halutaan käyttää myöhemmin.
 
-Wiegand-linjojen (D0/D1, tyypillisesti 5V logiikka) ja releen (12V puolella)
-liittäminen ESP32-C6:n 3,3V GPIO:hin vaatii todennäköisesti tasomuuntimen/
-optoerottimen — ei vielä valittu, lisätään ostoslistaan kun piirikaavio on
-suunniteltu. D0/D1/rele on kytketty GPIO2/GPIO3/GPIO10:een — näitä valittaessa
+Wiegand-linjojen (D0/D1, **mitattu +5V**, ks. alla) liittäminen ESP32-C6:n
+3,3V GPIO:hin vaatii tasomuuntimen — malli (2-kanavainen 5V↔3,3V-moduuli)
+valittu, ei vielä tilattu/rakennettu. Releen (12V puolella) tasomuunnin/ajuri
+on edelleen täysin auki — ei vielä valittu, lisätään ostoslistaan kun
+piirikaavio on suunniteltu. D0/D1/rele on kytketty GPIO2/GPIO3/GPIO10:een —
+näitä valittaessa
 piti erityisesti välttää C6:n strapping-/JTAG-/USB-/UART-pinnejä (GPIO4-9,
 12-13, 15-17), jotka estäisivät käynnistymisen tai veisivät sarjakonsolin;
 ks. `lock-client/firmware/src/main.rs`:n kommentti täydestä listasta.
@@ -250,11 +265,15 @@ reunat imevät kosteutta ellei niitä käsitellä.
   TOTP-logiikalla laitteen oman staattisen kortti/PIN-muistin sijaan:
   näppäimistöä käytetään Wiegand-lukijana, ja TOTP-vertailu + releohjaus on
   toteutettu ESP32-C6-DevKitC-1:lle `lock-client`-puolella, ja koko
-  Wiegand/TOTP/rele-ketju on varmennettu esp32sim-emulaattorissa (ei vielä
-  oikealla C6-laudalla, jota ei ole hankittu). Wiegand/rele-tasomuunnosta
-  (5V/3,3V/12V) ei ole vielä suunniteltu, eikä Wiegand-koodauksen oletuksia
-  ole varmennettu oikeaa keypadia vasten — ks. `lock-client/README.md`
-  tunnetuista rajoituksista.
+  Wiegand/TOTP/rele-ketju on varmennettu esp32sim-emulaattorissa. C6-lauta on
+  sittemmin hankittu ja testattu oikeasti (boottaus, `probe-rs`, releen tila
+  käynnistyksessä vahvistettu JTAG-rekisterilukemalla ja automaattisilla
+  hw-smoke-testeillä) — ks. `lock-client/README.md`. Wiegand D0/D1:n
+  jännite on nyt mitattu (+5V), eli tasomuunnin niiden ja GPIO2/GPIO3:n
+  välissä on vahvistettu pakolliseksi, mutta ei vielä rakennettu; releen
+  puolen tasomuunnos/ajuri on edelleen täysin suunnittelematta. Itse
+  Wiegand-koodauksen oletuksia (nibble-formaatti) ei ole varmennettu oikeaa
+  keypadia vasten — ks. `lock-client/README.md` tunnetuista rajoituksista.
 - Valepohjan tulee olla irrotettavissa ilman työkaluja tai vain kevyellä
   voimalla, huoltoa varten (patterin vaihto, elektroniikan tarkastus).
 - Jos säänkestävyys osoittautuu riittämättömäksi pelkällä tiivistenauhalla,
